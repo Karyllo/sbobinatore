@@ -84,7 +84,7 @@ def _run_step(step: str, corso: str, *, force=False, dry_run=False, only=None, o
     except ConfigError as e:
         return StepReport(step=step, corso=corso, error=str(e))
     ctx = StepContext(settings, course, force=force, dry_run=dry_run,
-                      only=set(only) if only else None, options=options or {}, quiet=quiet)
+                      only=set(only) if only else None, options=options or {}, quiet=quiet, step=step)
     try:
         with _stdout_guard(quiet):
             return get_step(step)(ctx)
@@ -93,7 +93,8 @@ def _run_step(step: str, corso: str, *, force=False, dry_run=False, only=None, o
     except (ModuleNotFoundError, NotImplementedError) as e:
         return StepReport(step=step, corso=corso, error=f"passo non disponibile: {e}")
     except Exception as e:  # noqa: BLE001 — il report deve sempre uscire, anche su bug
-        return StepReport(step=step, corso=corso, error=f"{type(e).__name__}: {e}")
+        ctx.log_exception()
+        return StepReport(step=step, corso=corso, error=f"{type(e).__name__}: {e} (dettagli in {ctx.layout.logs / 'sbob.log'})")
 
 
 # --------------------------------------------------------------------------- info

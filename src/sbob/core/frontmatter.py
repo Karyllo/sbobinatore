@@ -42,7 +42,7 @@ def lesson_meta(course, stem: str, **extra: Any) -> dict[str, Any]:
 
     n = naming.parse(stem)
     meta: dict[str, Any] = {"corso": course.nome, "slug": course.slug, "anno": course.anno_accademico,
-                            "lezione": stem}
+                            "edizione": course.anno_accademico, "lezione": stem}
     if n:
         meta.update(data=n.data.isoformat(), tipo=n.tipo, numero=n.num)
     meta.update(extra)

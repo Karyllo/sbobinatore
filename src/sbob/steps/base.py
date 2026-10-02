@@ -34,6 +34,7 @@ class StepContext:
     only: set[str] | None = None            # limita a questi stem
     options: dict[str, Any] = field(default_factory=dict)  # opzioni specifiche del passo
     quiet: bool = False
+    step: str = ""                          # nome del passo in esecuzione (per il log)
 
     @property
     def layout(self) -> Layout:
@@ -42,9 +43,32 @@ class StepContext:
     def manifest(self) -> Manifest:
         return Manifest(self.layout.manifest)
 
-    def log(self, msg: str) -> None:
+    def log(self, msg: str, level: str = "INFO") -> None:
+        """Messaggio per l'utente (stderr) e riga con data e ora in <corso>/.sbob/logs/sbob.log, per il post-mortem.
+        Nei log non finiscono mai credenziali: nessun chiamante le passa a log()."""
         if not self.quiet:
             err_console.print(msg, highlight=False)
+        self._to_file(level, msg)
+
+    def log_exception(self) -> None:
+        """Traceback completo solo su file (all'utente arriva il messaggio breve nel report)."""
+        import traceback
+        self._to_file("ERROR", traceback.format_exc().rstrip())
+
+    def _to_file(self, level: str, msg: str) -> None:
+        import time
+        try:
+            lay = self.layout
+            lay.logs.mkdir(parents=True, exist_ok=True)
+            path = lay.logs / "sbob.log"
+            if path.exists() and path.stat().st_size > 2_000_000:          # rotazione semplice: un solo file vecchio
+                path.replace(lay.logs / "sbob.log.1")
+            stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open(path, "a", encoding="utf-8") as f:
+                for line in str(msg).splitlines() or [""]:
+                    f.write(f"{stamp} {level:<5} [{self.step or '-'}] {line}\n")
+        except OSError:
+            pass                                                        # il log non deve mai rompere un passo
 
     def report(self, step: str) -> StepReport:
         return StepReport(step=step, corso=self.course.slug, dry_run=self.dry_run)

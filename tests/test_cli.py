@@ -85,3 +85,17 @@ def test_dry_run_chain_propagates(settings):
     d = json.loads(runner.invoke(app, ["run", "prova", "--dry-run", "--json", "--da", "audio"]).stdout)
     assert [r["step"] for r in d["reports"]] == ["audio", "trascrivi", "appunti", "mappa"]
     assert [r["done"] for r in d["reports"]] == [[STEM]] * 4
+
+
+def test_log_file_has_timestamps_and_traceback_on_crash(settings, monkeypatch):
+    from sbob.steps import audio
+
+    def boom(ctx):
+        ctx.log("sto per rompermi")
+        raise RuntimeError("bug finto")
+    monkeypatch.setattr(audio, "run", boom)
+    d = json.loads(runner.invoke(app, ["audio", "prova", "--json"]).stdout)
+    log = (Layout.of(settings.corso("prova")).logs / "sbob.log").read_text()
+    assert d["exit_code"] == 1 and "sbob.log" in d["error"]
+    assert "INFO  [audio] sto per rompermi" in log and "ERROR [audio] Traceback" in log and "RuntimeError: bug finto" in log
+    assert log.splitlines()[0][:4] == "2026" or log.splitlines()[0][4] == "-"                    # data e ora in testa

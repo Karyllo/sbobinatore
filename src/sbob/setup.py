@@ -38,7 +38,7 @@ def q(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value)
     if isinstance(value, dict):
-        return "{ " + ", ".join(f"{k} = {q(v)}" for k, v in value.items()) + " }"
+        return "{ " + ", ".join(f"{json.dumps(str(k))} = {q(v)}" for k, v in value.items()) + " }"
     return json.dumps(str(value), ensure_ascii=False)
 
 

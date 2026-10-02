@@ -38,7 +38,7 @@ def run(ctx: StepContext) -> StepReport:
         for pdf in pdfs:
             out = out_dir / f"{pdf.stem}.md"
             existed = out.exists() and not ctx.force
-            meta = {"corso": ctx.course.nome, "slug": ctx.course.slug, "anno": ctx.course.anno_accademico,
+            meta = {"corso": ctx.course.nome, "slug": ctx.course.slug, "anno": ctx.course.anno_accademico, "edizione": ctx.course.anno_accademico,
                     "fonte": pdf.name, "tipo": "materiale", "modello": role.model} if ctx.course.slug != "pdf" else {}
             try:
                 r = convert_pdf(pdf, out, role, ctx.course.lingua, force=ctx.force, meta=meta, log=ctx.log,

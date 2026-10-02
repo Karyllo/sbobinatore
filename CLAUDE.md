@@ -300,6 +300,15 @@ Lato sbob:
 - Indice/mappa del corso principale: sezione per edizione e concetti incrociati tra anni (`core/index.render_course`, `render_all`, catalog.json); `status` e menu ("lavora sull'archivio dell'anno precedente").
 - File da toccare: `config.py` (Course.archivio, archivio_docente), nuovo `core/archivio.py`, `cli.py`, `core/index.py`, `core/search.py`, `core/status.py`, `menu.py`, `setup.py` (`q` per le chiavi del dizionario TOML), test, README, skill.
 
+## Fase 9 (richiesta dell'utente 2026-10-02, DA PIANIFICARE e implementare dopo l'archivio)
+1. **Scegliere quali corsi sincronizzare.** L'utente è iscritto a moltissimi corsi su WeBeep e non vuole sincronizzare tutto. Oggi sbob lavora solo sui corsi che stanno in sbob.toml con `webeep_id` (quindi nulla si sincronizza da solo), ma manca il modo comodo di sceglierli: serve un comando interattivo (`sbob webeep scegli`: elenco con spunte, filtro per anno, crea le voci `[corsi.<slug>]` con `webeep_id` e cartella) e un `sbob aggiorna` che lancia la catena solo sui corsi scelti. Opzione per "sincronizza tutto" solo se esplicita.
+2. **NotebookLM automatico per corso** (API non ufficiale, `notebooklm-py`, già usata per la trascrizione):
+   - un taccuino per corso, creato in automatico;
+   - **un file `.md` per cartella**, con il nome della cartella, che contiene tutti i `.md` già convertiti al suo interno (slide, PDF, esercitazioni, appunti e così via). È la stessa logica di `steps/merge.py` (limite 500k parole per sorgente), applicata cartella per cartella;
+   - **aggiornamento incrementale**: se il contenuto di una cartella cambia (hash), si sostituisce solo quella sorgente nel taccuino; lo stato (id sorgente e hash) sta nel manifest;
+   - obiettivo dell'utente: il taccuino sempre aggiornato con lezioni, materiale e tutte le informazioni, per chiudere l'automazione controllata da un agente.
+   - Da verificare: limiti di sorgenti per taccuino, rate limit e stabilità dell'API non ufficiale, login (`notebooklm login`, `NeedsHuman`).
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).

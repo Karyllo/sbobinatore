@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -82,8 +83,13 @@ class WebeepClient:
         out = []
         for c in self.call("core_enrol_get_users_courses", userid=uid):
             m = re.search(r"\[(\d{4})-(\d{2})\]", c.get("fullname", ""))
+            anno = f"{m.group(1)}-{m.group(2)}" if m else None
+            if anno is None and c.get("startdate"):               # senza [AAAA-AA] nel nome: dall'inizio del corso
+                d = datetime.fromtimestamp(c["startdate"])
+                y = d.year if d.month >= 8 else d.year - 1
+                anno = f"{y}-{(y + 1) % 100:02d}"
             out.append({"id": c["id"], "nome": c.get("fullname", ""), "breve": c.get("shortname", ""),
-                        "anno": f"{m.group(1)}-{m.group(2)}" if m else None,
+                        "anno": anno,
                         "inizio": c.get("startdate"), "fine": c.get("enddate")})
         return sorted(out, key=lambda c: (c["anno"] or "", c["nome"]), reverse=True)
 

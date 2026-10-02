@@ -293,7 +293,8 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
     try:
         for src, rel, h, out in todo:
             ext = src.suffix.lower()
-            meta = {"corso": course.nome, "slug": course.slug, "anno": course.anno_accademico, "fonte": rel,
+            meta = {"corso": course.nome, "slug": course.slug, "anno": course.anno_accademico,
+                    "edizione": course.anno_accademico, "fonte": rel,
                     "sezione": rel.split("/")[0] if "/" in rel else None, "tipo": infer_tipo(rel)}
             try:
                 if ext in TEXT_EXT:

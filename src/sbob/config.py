@@ -51,6 +51,9 @@ class Course:
     materiale: Path | None = None   # cartella webeep-sync, se diversa da <cartella>/materiale
     inizio_corso: str | None = None # "YYYY-MM-DD", per calcolare la settimana nel merge
     webeep_id: int | None = None    # id del corso su WeBeep (sbob webeep collega): abilita il passo `materiale`
+    archivio: dict[str, int] = field(default_factory=dict)  # edizioni passate: anno → id WeBeep (stesso docente)
+    archivio_docente: str | None = None   # docente scelto con `sbob archivio <corso> docenti` (altrimenti quello del corso)
+    archivio_di: str | None = None  # valorizzato solo sul Course derivato di un'edizione passata: slug del corso principale
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -142,7 +145,7 @@ def _parse_course(slug: str, data: dict[str, Any], root: Path, lingua: str) -> C
     if trascrizione not in TRANSCRIBE_BACKENDS:
         raise ConfigError(f"[corsi.{slug}].trascrizione deve essere uno di {sorted(TRANSCRIBE_BACKENDS)}")
 
-    known = {"nome", "anno_accademico", "cartella", "lingua", "sorgente", "sorgenti", "trascrizione",
+    known = {"nome", "anno_accademico", "cartella", "lingua", "sorgente", "sorgenti", "archivio", "archivio_docente", "trascrizione",
              "notebook", "materiale", "inizio_corso", "webeep_id"}
     return Course(
         slug=slug,
@@ -157,6 +160,8 @@ def _parse_course(slug: str, data: dict[str, Any], root: Path, lingua: str) -> C
         materiale=_expand(data["materiale"]) if data.get("materiale") else None,
         inizio_corso=data.get("inizio_corso"),
         webeep_id=int(data["webeep_id"]) if data.get("webeep_id") else None,
+        archivio={str(k): int(v) for k, v in (data.get("archivio") or {}).items()},
+        archivio_docente=data.get("archivio_docente"),
         extra={k: v for k, v in data.items() if k not in known},
     )
 
