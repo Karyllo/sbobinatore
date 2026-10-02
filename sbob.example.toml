@@ -1,8 +1,10 @@
 # Copia in ~/.config/sbob/sbob.toml (o ./sbob.toml, o $SBOB_CONFIG) e metti le chiavi in .env accanto.
 
-root = "~/Desktop/Karyl/università"           # le cartelle relative dei corsi partono da qui
+root = "~/Università"                         # le cartelle relative dei corsi partono da qui
 lingua = "it"
-downloader = "~/polimi_recordings_downloader"  # clone con il suo .venv (prd)
+# Downloader delle registrazioni. Default: installato da uv dal fork (nessun clone manuale).
+# Per sviluppo: la cartella di un clone (con o senza .venv).
+# downloader = "git+https://github.com/Karyllo/polimi_recordings_downloader@local-fixes"
 
 [audio]
 bitrate = "32k"

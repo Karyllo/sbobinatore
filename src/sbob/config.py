@@ -20,6 +20,11 @@ from typing import Any
 from dotenv import load_dotenv
 
 CONFIG_HOME = Path.home() / ".config" / "sbob"
+# Downloader delle registrazioni: fork con le correzioni (pacchetto installabile, archivio recman, click < 8.2).
+# Con un indirizzo git uv lo installa da solo in un ambiente isolato: nessun clone manuale.
+# TODO quando il fork è pubblicato su GitHub: verificare che questo indirizzo esista.
+DEFAULT_DOWNLOADER = "git+https://github.com/Karyllo/polimi_recordings_downloader@local-fixes"
+DEFAULT_ROOT = "~/sbob"
 
 # Tipi di sorgente registrazioni supportati dal passo download
 SOURCE_TYPES = {"txt", "webeep", "webpage-url", "webpage-html", "archives"}
@@ -52,7 +57,7 @@ class Settings:
     path: Path | None               # file sbob.toml caricato (None = default)
     root: Path
     lingua: str
-    downloader: Path
+    downloader: str                 # cartella del clone (con o senza .venv) oppure "git+https://..."
     audio_bitrate: str
     modelli: dict[str, dict[str, Any]]   # ruolo → {provider, model, ...}
     providers: dict[str, dict[str, Any]] # nome → {tipo, chiavi, base_url, ...}
@@ -151,7 +156,7 @@ def load_settings(path: Path | None = None) -> Settings:
         load_dotenv(path.parent / ".env", override=False)
     load_dotenv(Path.cwd() / ".env", override=False)
 
-    root = _expand(raw.get("root", "~/Desktop/Karyl/università"))
+    root = _expand(raw.get("root", DEFAULT_ROOT))
     lingua = raw.get("lingua", "it")
     corsi = {slug: _parse_course(slug, data, root, lingua)
              for slug, data in raw.get("corsi", {}).items()}
@@ -160,7 +165,7 @@ def load_settings(path: Path | None = None) -> Settings:
         path=path,
         root=root,
         lingua=lingua,
-        downloader=_expand(raw.get("downloader", "~/polimi_recordings_downloader")),
+        downloader=raw.get("downloader", DEFAULT_DOWNLOADER),
         audio_bitrate=raw.get("audio", {}).get("bitrate", "32k"),
         modelli=_merge(DEFAULT_MODELLI, raw.get("modelli", {})),
         providers=_merge(DEFAULT_PROVIDERS, raw.get("providers", {})),

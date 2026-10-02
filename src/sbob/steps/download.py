@@ -1,6 +1,8 @@
 """Passo download: registrazioni Polimi → video/<stem>.mp4.
 
-Usa il downloader `prd` nel SUO venv (settings.downloader/.venv): non si importa, perché vincola typer 0.6.
+Usa il downloader `prd` in un ambiente separato (vincola typer 0.6 e click < 8.2, incompatibili con sbob):
+  - `downloader` = cartella con .venv  → si usa quel venv (sviluppo locale)
+  - altrimenti (cartella o "git+https://...") → `uv run --no-project --with <spec>`: uv installa e mette in cache
 
 Flusso in due fasi, così una ripetizione non riscarica nulla:
   1. piano   `prd <tipo> ... --no-aria2c` → xlsx con data e link (nessun download)
@@ -32,25 +34,32 @@ _TICKET_MSGS = ("refresh",                    # prd: "Try refreshing the ticket"
                 "downloadrecordinginfo")      # KeyError di prd quando Webex risponde senza dati (ticket non valido)
 
 
-def prd_python(settings: Settings) -> Path:
-    py = settings.downloader / ".venv" / "bin" / "python"
-    if not py.exists():
-        raise NeedsHuman(f"Downloader non trovato in {settings.downloader}",
-                         action="imposta `downloader` in sbob.toml (clone di polimi_recordings_downloader con .venv)")
-    return py
+def prd_command(settings: Settings) -> tuple[list[str], dict[str, str]]:
+    """(comando per lanciare `python -m prd`, variabili d'ambiente)."""
+    spec = settings.downloader
+    local = Path(spec).expanduser() if not spec.startswith(("git+", "http")) else None
+    if local is not None and (local / ".venv" / "bin" / "python").exists():
+        # clone con il suo venv: prd non è installato lì, si importa dalla cartella
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(local), os.environ.get("PYTHONPATH")]))}
+        return [str(local / ".venv" / "bin" / "python"), "-m", "prd"], env
+    if local is not None and not local.exists():
+        raise NeedsHuman(f"Downloader non trovato in {local}",
+                         action="correggi `downloader` in sbob.toml (cartella del clone o indirizzo git+https://...)")
+    uv = shutil.which("uv")
+    if not uv:
+        raise NeedsHuman("Serve uv per installare il downloader",
+                         action="curl -LsSf https://astral.sh/uv/install.sh | sh")
+    return [uv, "run", "--no-project", "--quiet", "--with", str(local or spec), "python", "-m", "prd"], dict(os.environ)
 
 
 def _run_prd(settings: Settings, args: list[str], cwd: Path) -> subprocess.CompletedProcess:
     cwd.mkdir(parents=True, exist_ok=True)
-    # prd non è installato nel suo venv: si importa dalla cartella del clone
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(settings.downloader),
-                                                                       os.environ.get("PYTHONPATH")]))}
-    return subprocess.run([str(prd_python(settings)), "-m", "prd", *args], cwd=cwd, text=True,
-                          capture_output=True, env=env)
+    cmd, env = prd_command(settings)
+    return subprocess.run([*cmd, *args], cwd=cwd, text=True, capture_output=True, env=env)
 
 
 def set_cookie(settings: Settings, nome: str, valore: str) -> None:
-    res = _run_prd(settings, ["set-cookie", nome, valore], settings.downloader)
+    res = _run_prd(settings, ["set-cookie", nome, valore], Path.home())
     if res.returncode != 0:
         raise RuntimeError((res.stdout + res.stderr).strip() or "set-cookie fallito")
 

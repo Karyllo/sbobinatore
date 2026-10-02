@@ -339,6 +339,75 @@ def run(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, as_json: J
 
 
 @app.command()
+def doctor(as_json: JsonOpt = False,
+           veloce: Annotated[bool, typer.Option("--veloce", help="Non avvia il downloader (salta l'installazione).")] = False):
+    """Controlla che ci sia tutto (programmi, chiavi, librerie, downloader) e dice come sistemare ciò che manca."""
+    from sbob.core.doctor import run_checks
+
+    checks = run_checks(_settings(), quick=veloce)
+    missing = [c for c in checks if c["stato"] == "manca"]
+    if as_json:
+        sys.stdout.write(json.dumps({"ok": not missing, "controlli": checks}, ensure_ascii=False, indent=2) + "\n")
+    else:
+        icon = {"ok": "[green]✓[/green]", "manca": "[red]✗[/red]", "avviso": "[yellow]![/yellow]"}
+        for c in checks:
+            out.print(f"{icon[c['stato']]} {c['nome']}: {c['dettaglio']}")
+            if c["rimedio"]:
+                out.print(f"    → {c['rimedio']}")
+        out.print("[green]Tutto pronto.[/green]" if not missing else f"[red]{len(missing)} cose da sistemare.[/red]")
+    raise typer.Exit(int(Exit.HUMAN if missing else Exit.OK))
+
+
+@app.command()
+def init(force: Annotated[bool, typer.Option("--force", help="Ricrea la configurazione se esiste già.")] = False):
+    """Prima configurazione guidata: cartella dei corsi, modello per gli appunti, chiavi API, primi corsi."""
+    from sbob.setup import init as run_init
+
+    if not sys.stdin.isatty():
+        err.print("[red]sbob init è interattivo: lancialo da un terminale.[/red]")
+        raise typer.Exit(Exit.ERROR)
+    raise typer.Exit(run_init(force))
+
+
+@app.command("aggiungi-corso")
+def aggiungi_corso():
+    """Aggiunge un corso alla configurazione facendo qualche domanda."""
+    from sbob.setup import add_course
+
+    if not sys.stdin.isatty():
+        err.print("[red]Comando interattivo: lancialo da un terminale.[/red]")
+        raise typer.Exit(Exit.ERROR)
+    raise typer.Exit(add_course())
+
+
+@app.command("installa-skill")
+def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascrive una skill già presente.")] = False):
+    """Installa la skill per Claude Code in ~/.claude/skills/sbobinatore (così Claude sa usare sbob)."""
+    import shutil
+    from pathlib import Path
+
+    import sbob
+
+    pkg = Path(sbob.__file__).parent
+    src = next((p for p in (pkg / "skill", pkg.parents[1] / "skills" / "sbobinatore") if (p / "SKILL.md").exists()), None)
+    if src is None:
+        err.print("[red]SKILL.md non trovato nel pacchetto.[/red]")
+        raise typer.Exit(Exit.ERROR)
+    dst = Path.home() / ".claude" / "skills" / "sbobinatore"
+    if dst.exists() or dst.is_symlink():
+        if dst.resolve() == src.resolve():
+            err.print(f"Skill già collegata: {dst} → {src}")
+            return
+        if not force:
+            err.print(f"[yellow]{dst} esiste già.[/yellow] Usa --force per sostituirla.")
+            raise typer.Exit(Exit.ERROR)
+        shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dst)
+    err.print(f"[green]Skill installata in {dst}.[/green] Riavvia Claude Code per vederla.")
+
+
+@app.command()
 def cookie(nome: Annotated[str, typer.Argument(help="ticket | MoodleSession | SSL_JSESSIONID")],
            valore: str):
     """Salva un cookie per il downloader (inoltra a `prd set-cookie`)."""

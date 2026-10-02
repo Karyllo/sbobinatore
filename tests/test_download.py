@@ -126,3 +126,26 @@ def test_enriched_links_file_sets_type_topic_and_date(settings, course_with_link
     assert sorted(rep.done) == ["2026-05-07_prova_lab01", "2026-05-08_prova_lez01"]
     sent = open(calls[0][1]).read().split()
     assert len(sent) == 2 and all("\t" not in l and not l.startswith("#") for l in sent)   # a prd solo i link
+
+
+def test_prd_command_modes(settings, tmp_path, monkeypatch):
+    clone = tmp_path / "clone"
+    (clone / ".venv" / "bin").mkdir(parents=True)
+    (clone / ".venv" / "bin" / "python").write_text("")
+    settings.downloader = str(clone)
+    cmd, env = download.prd_command(settings)
+    assert cmd[0].endswith(".venv/bin/python") and str(clone) in env["PYTHONPATH"]       # venv locale
+
+    monkeypatch.setattr(download.shutil, "which", lambda n: "/usr/bin/uv")
+    settings.downloader = "git+https://github.com/x/y@b"
+    cmd, _ = download.prd_command(settings)
+    assert cmd[:5] == ["/usr/bin/uv", "run", "--no-project", "--quiet", "--with"] and cmd[5] == "git+https://github.com/x/y@b"
+
+    settings.downloader = str(tmp_path / "manca")
+    with pytest.raises(NeedsHuman):
+        download.prd_command(settings)
+    monkeypatch.setattr(download.shutil, "which", lambda n: None)
+    settings.downloader = "git+https://github.com/x/y"
+    with pytest.raises(NeedsHuman) as e:
+        download.prd_command(settings)
+    assert "uv" in e.value.action
