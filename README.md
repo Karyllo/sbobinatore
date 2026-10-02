@@ -143,7 +143,6 @@ Con `notebooklm login` fatto (e `[notebook] attivo = true` in `sbob.toml` per av
   materiale_md/   ← gli stessi convertiti in Markdown
   video/  audio/  trascrizioni/  appunti/  merge/
   notebook/       ← i file uniti caricati su NotebookLM (uno per sorgente), generati da `sbob notebook`
-  notebook/       ← i file uniti caricati su NotebookLM (uno per sorgente)
   mappa/          ← riassunti, concetti e indice, per la navigazione
   archivio/<anno>/  ← edizioni passate, stessa struttura
   .sbob/          ← stato interno (log, cache, costi): non toccare
