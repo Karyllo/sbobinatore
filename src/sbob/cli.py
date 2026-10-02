@@ -187,12 +187,14 @@ def status(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso (
 
 
 @app.command()
-def download(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
+def download(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+             as_json: JsonOpt = False,
              tipo: Annotated[Optional[str], typer.Option(help="Forza il tipo: lez|ese|lab|sem|tde (default: dalla forma didattica dell'archivio, altrimenti lez)")] = None,
-             links: Annotated[Optional[str], typer.Option(help="File di link alternativo a quello del corso.")] = None):
-    """Scarica le registrazioni del corso in video/."""
-    _emit([_run_step("download", corso, archivio=archivio, force=force, dry_run=dry_run, quiet=as_json,
-                     options={"tipo": tipo, "links": links})], as_json)
+             links: Annotated[Optional[str], typer.Option(help="File di link alternativo a quello del corso.")] = None,
+             formato: Annotated[Optional[str], typer.Option(help="video (default) | audio: solo la voce, molto più leggero (in audio/)")] = None):
+    """Scarica le registrazioni del corso in video/ (o solo l'audio in audio/)."""
+    _emit([_run_step("download", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
+                     options={"tipo": tipo, "links": links, "formato": formato})], as_json)
 
 
 @app.command()

@@ -34,15 +34,16 @@ class FakeWebex:
         ids = list(ids)
         self.info_calls.append(ids)
         return {v: webex.Recording(id=v, name="Stanza personale", created=datetime.strptime(self.created[v], "%Y-%m-%d %H:%M:%S"),
-                                   created_gmt=None, url=f"https://cdn/{v}.mp4") for v in ids}
+                                   created_gmt=None, url=f"https://cdn/{v}.mp4",
+                                   audio_url=f"https://cdn/{v}.mp3") for v in ids}
 
-    def download(self, items, dest, log=print, connections=16):
+    def download(self, jobs, dest, log=print, connections=16):
         dest.mkdir(parents=True, exist_ok=True)
         out = {}
-        for r, n in items:
-            (dest / f"{n}.mp4").write_text("video")
-            out[r.id] = dest / f"{n}.mp4"
-            self.downloaded.append(r.id)
+        for j in jobs:
+            (dest / j.name).write_text("file")
+            out[j.key] = dest / j.name
+            self.downloaded.append(j.key)
         return out
 
 
@@ -74,6 +75,30 @@ def test_download_numbers_and_is_incremental(settings, course_with_links, monkey
     links(c, ID2, ID1, ID3)                                            # nuova: numerazione continua, scarica solo quella
     rep3 = download.run(StepContext(settings, c, quiet=True))
     assert rep3.done == ["2025-09-24_prova_lez03"] and fake.info_calls == [[ID3]] and fake.downloaded[-1] == ID3
+
+
+def test_audio_format_goes_to_audio_and_numbering_spans_both(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00", ID2: "2025-09-18 10:00:00"})
+    links(c, ID1)
+    download.run(StepContext(settings, c, quiet=True))                                   # video
+    links(c, ID1, ID2)
+    rep = download.run(StepContext(settings, c, quiet=True, options={"formato": "audio"}))
+    lay = Layout.of(c)
+    assert rep.done == ["2025-09-18_prova_lez02"] and (lay.audio / "2025-09-18_prova_lez02.mp3").exists()
+    assert not (lay.video / "2025-09-18_prova_lez02.mp4").exists()
+    c.extra["formato"] = "boh"
+    assert download.run(StepContext(settings, c, quiet=True)).error
+
+
+def test_jobs_for_formats():
+    r = webex.Recording(id=ID1, name="", created=datetime(2026, 1, 1), created_gmt=None, url="https://cdn/x.mp4",
+                        audio_url="https://cdn/x.mp3")
+    assert webex.jobs_for(r, "s").name == "s.mp4" and webex.jobs_for(r, "s", "audio").name == "s.mp3"
+    r.hls, r.audio_url, r.url = True, None, "https://cdn/x.m3u8"
+    j = webex.jobs_for(r, "s", "audio")
+    assert j.stream and j.audio_only and j.name == "s.m4a"
+    assert webex.jobs_for(r, "s").stream
 
 
 def test_legacy_manifest_keys_are_recognised_and_relinked(settings, course_with_links, monkeypatch):

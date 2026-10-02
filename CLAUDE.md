@@ -65,18 +65,15 @@ Ogni adapter è `Classe(name, key, conf)`. Crea il client SDK **una volta** in `
 
 ## Passi: cosa portare e da dove
 
-**download** (`steps/download.py`)
-- Funzioni: `run(ctx)` e `set_cookie(settings, nome, valore)`.
-- Chiama `settings.downloader/.venv/bin/python -m prd <tipo> ... --output <layout.staging>` tramite subprocess con argomenti in lista; mai `shell=True`. Non importare `prd`: vincola typer 0.6.
-  - `tipo` viene da `course.sorgente.tipo`.
-  - Per `txt`, il file è `course.sorgente.file`, relativo alla cartella del corso, oppure `ctx.options["links"]`.
-  - Passa sempre `--course <slug> --academic-year <anno>`.
-- prd scrive in `staging/<slug> <anno>/YYYY-MM-DD HH-MM.mp4`. Se restano file `.aria2`, è un errore.
-- Assegna i nomi con `naming.next_numbers(esistenti in video/, date, slug, ctx.options["tipo"])` e sposta in `video/`.
-- Salva in `manifest.videos` l'ID video, che si legge dall'xlsx di prd (colonna Link). Così una ripetizione non rinumera.
-- Un ticket scaduto (stderr di prd con "Try refreshing the ticket") → `NeedsHuman(action="sbob cookie ticket <valore>")`.
-- `set_cookie` lancia `prd set-cookie`.
-- Logica di riferimento: `~/polimi_recordings_downloader/process_matematica.py`.
+**download** (`steps/download.py` + `webex.py`, nativo dal 2026-10-02: **niente più prd**)
+- Fonti → link (`source_links`): `archivio` (recman → link_archivio.txt), `txt`, `webpage-url`/`webpage-html` (`webex.links_in_html`, anche redirect Google), `webeep` (API col token: moduli URL, descrizioni, riassunti di sezione, pagine; `url` della fonte può restringere a `course/view.php?id=C&section=S` o `mod/.../view.php?id=M`; tipo dal titolo con `tipo_from_title`). `archives` (vecchio tipo di prd) = `archivio`.
+- Link → id (`webex.video_id`): `recording[/playback]/<id>` diretto; `ldr.php?RCID=` si risolve seguendo il redirect (non serve il ticket; RCID ≠ id). Le aule virtuali (`joinservice`, `meet`) si scartano.
+- Id → info (`webex.recording`): `GET /webappng/api/v1/recordings/<id>/stream?siteurl=politecnicomilano` col cookie `ticket`. Senza ticket valido: 403 con `code 53004` → `TicketError` → rinnovo silenzioso (`sbob login --rinnova`) e un secondo tentativo, poi `NeedsHuman("sbob login")`. `downloadInfo` ha `mp4URL`, `audioURL` (mp3), `hlsURL`; con `preventDownload` si usa l'HLS (ffmpeg, copia senza ricodifica).
+- **Identità = id del video** (`manifest.videos[id] = stem`). `createTime` dipende dal fuso dell'account (senza login è GMT): per questo non si usa più la chiave "YYYY-MM-DD HH-MM" di prd; i manifest vecchi si riconoscono con `Recording.legacy_key` e si ricollegano all'id al primo giro.
+- Scarico (`webex.download`): aria2c con `--continue` in `.sbob/staging/dl` (non si svuota: riprende i file a metà; il file di input con i link firmati si cancella), riserva in Python con Range se manca aria2c; stdout di aria2c su stderr (per `--json`).
+- **Formato** (`--formato`, `formato` del corso, `[download] formato`): `video` (default, in `video/`) o `audio` (mp3 di Webex, o l'audio dello stream in .m4a, direttamente in `audio/`: il passo audio non ha niente da fare, la trascrizione accetta mp3/m4a). La numerazione guarda sia `video/` sia `audio/`.
+- Cookie in `~/.config/sbob/cookies.json` (600, `secrets.save_cookie/load_cookie`); si legge anche il file del vecchio prd, così chi aveva già fatto login non deve rifarlo. L'email per Webex in `sbob login` viene da `[login] email` o, se manca, dal profilo WeBeep (`core_user_get_users_by_field`), solo in memoria.
+- **Provato dal vero:** EDP 26 registrazioni (archivio + link.txt), FRO 32 dalla fonte webeep (lez/ese dal titolo); scarico mp4 (37 MB in 7 s), stream di una registrazione col download disattivato (88 min, ffmpeg), audio mp3 (EDP) e m4a dallo stream (FRO).
 
 **audio** (`steps/audio.py`)
 - `ffmpeg -nostdin -y -i src -vn -c:a aac -b:a <settings.audio_bitrate> tmp`, poi rename atomico in `audio/<stem>.aac`.
@@ -204,25 +201,9 @@ Altro emerso nella prova sulla lezione intera (85 minuti di Ricerca Operativa):
 - `costs.jsonl` salva anche il messaggio d'errore troncato.
 - Whisper: **non mantenuto** (decisione dell'utente). Resta per chi forka, non va sviluppato.
 
-## Downloader (clone ~/polimi_recordings_downloader, branch `local-fixes`)
-Approvato dall'utente. Commit sopra `main` (upstream):
-1. Le 3 correzioni locali che c'erano già.
-2. Archivio recman spostato su `onlineservices.polimi.it`:
-   - dominio ricavato dal link
-   - `urljoin` per i link assoluti
-   - cookie `JSESSIONID` + `INGRESSCOOKIE` (il vecchio `SSL_JSESSIONID` vale per www11.ceda)
-   - paginazione seguendo il link "tutte" (`action=plen_0`)
-   - subject = `[Forma didattica] argomento`
-
-   Provato offline sulla pagina salvata dall'utente. **Online NON funziona fuori dal browser:** con i cookie copiati, recman risponde 500 `POLIJ_049001`, a causa dei codici monouso `__pj1` e della sessione legata al browser.
-   Soluzione adottata: raccolta via Claude in Chrome (procedura in SKILL.md), che produce un `link.txt` arricchito: `link<TAB>data archivio<TAB>forma<TAB>argomento`.
-   `download.read_links_file` passa a prd solo i link e collega i metadati tramite l'ID video. La data dell'archivio prevale su quella di Webex: su EDP 2 registrazioni su 26 avevano la data Webex sbagliata.
-   Provato su EDP: dry-run con 26 registrazioni, `lez01..18` e `lab01..08`.
-
-Lato sbob:
-- `read_plan` legge la forma didattica (Lezione→lez, Esercitazione→ese, Laboratorio→lab, Altro→sem) e numera per tipo.
-- L'argomento va in `manifest.meta[stem].argomento`, poi nel frontmatter di trascrizioni e appunti, poi nel titolo della mappa.
-- `--tipo` forza il tipo.
+## Downloader esterno (storico)
+Fino al 2026-10-02 il download passava da prd (polimi_recordings_downloader di Paolo Basso, MIT; fork `Karyllo/polimi_recordings_downloader`, branch `local-fixes`). Ora è nativo (`webex.py`): il fork e il clone `~/polimi_recordings_downloader` non servono più. La chiave `downloader` in sbob.toml viene ignorata.
+- La forma didattica dell'archivio (Lezione→lez, Esercitazione→ese, Laboratorio→lab, Altro→sem) dà il tipo, l'argomento va in `manifest.meta[stem].argomento` (poi frontmatter e mappa); la data dell'archivio prevale su quella di Webex (su EDP 2 su 26 erano sbagliate). `--tipo` forza il tipo.
 
 ## Installazione (fatta il 2026-10-02)
 - Skill: symlink `~/.claude/skills/sbobinatore` → `skills/sbobinatore`. Le modifiche al file valgono subito.

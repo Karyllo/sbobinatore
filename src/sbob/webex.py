@@ -13,6 +13,7 @@ import html
 import re
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ class Recording:
     created_gmt: datetime | None
     url: str                  # mp4 (o hls se il download è disattivato dal docente)
     hls: bool = False
+    audio_url: str | None = None   # mp3 della sola voce (molto più leggero del video), se Webex lo offre
     duration_s: int = 0
     size: int = 0
 
@@ -136,6 +138,7 @@ def recording(vid: str, http: requests.Session) -> Recording:
     created = _when(data.get("createTime")) or _when(data.get("gmtCreateTime")) or datetime.min
     return Recording(id=vid, name=str(data.get("recordName") or "").strip(), created=created,
                      created_gmt=_when(data.get("gmtCreateTime")), url=url, hls=hls or ".m3u8" in url.split("?")[0],
+                     audio_url=None if data.get("preventDownload") else info.get("audioURL"),
                      duration_s=int(data.get("duration") or 0) // 1000, size=int(data.get("fileSize") or 0))
 
 
@@ -156,43 +159,60 @@ def recordings(ids: Iterable[str], http: requests.Session, workers: int = 8) -> 
 
 # --------------------------------------------------------------------------- scarico
 
-def download(items: list[tuple[Recording, str]], dest: Path, log: Callable[[str], None] = print,
-             connections: int = 16) -> dict[str, Path]:
-    """Scarica in `dest` come <nome>.mp4 e restituisce {id: file} di quelli completi.
-    mp4 → aria2c (riprende da dove si era fermato grazie ai file .aria2), oppure in Python se aria2c manca.
-    hls → ffmpeg (copia dei flussi, senza ricodifica)."""
+@dataclass
+class Job:
+    """Un file da scaricare: `name` è il nome finale (con estensione). `stream` = HLS da salvare con ffmpeg."""
+    key: str
+    url: str
+    name: str
+    stream: bool = False
+    audio_only: bool = False
+
+
+def jobs_for(rec: Recording, stem: str, formato: str = "video") -> Job:
+    """video → mp4 (o lo stream se il download è disattivato); audio → mp3 di Webex, altrimenti l'audio dello stream."""
+    if formato == "audio":
+        if rec.audio_url:
+            return Job(rec.id, rec.audio_url, f"{stem}.mp3")
+        return Job(rec.id, rec.url, f"{stem}.m4a", stream=True, audio_only=True)
+    return Job(rec.id, rec.url, f"{stem}.mp4", stream=rec.hls)
+
+
+def download(jobs: list[Job], dest: Path, log: Callable[[str], None] = print, connections: int = 16) -> dict[str, Path]:
+    """Scarica in `dest` e restituisce {key: file} di quelli completi.
+    File diretti → aria2c (riprende da dove si era fermato grazie ai file .aria2), oppure in Python se aria2c manca.
+    Stream HLS → ffmpeg (copia dei flussi, senza ricodifica; solo l'audio se richiesto)."""
     dest.mkdir(parents=True, exist_ok=True)
-    mp4 = [(r, n) for r, n in items if not r.hls]
-    hls = [(r, n) for r, n in items if r.hls]
-    if mp4:
+    direct = [j for j in jobs if not j.stream]
+    if direct:
         if shutil.which("aria2c"):
-            _aria2c(mp4, dest, connections)
+            _aria2c(direct, dest, connections)
         else:
-            for r, n in mp4:
-                _python_download(r.url, dest / f"{n}.mp4")
-    for r, n in hls:
-        log(f"download: {n} ha il download disattivato, salvo lo stream con ffmpeg…")
+            for j in direct:
+                _python_download(j.url, dest / j.name)
+    for j in (j for j in jobs if j.stream):
+        log(f"download: {Path(j.name).stem} ha il download disattivato, salvo lo stream con ffmpeg…")
         try:
-            _ffmpeg_hls(r.url, dest / f"{n}.mp4")
+            _ffmpeg_hls(j.url, dest / j.name, j.audio_only)
         except RuntimeError as e:
-            log(f"download: {n}: {e}")
+            log(f"download: {Path(j.name).stem}: {e}")
     done = {}
-    for r, n in items:
-        f = dest / f"{n}.mp4"
-        if f.exists() and not (dest / f"{n}.mp4.aria2").exists() and f.stat().st_size > 0:
-            done[r.id] = f
+    for j in jobs:
+        f = dest / j.name
+        if f.exists() and not (dest / f"{j.name}.aria2").exists() and f.stat().st_size > 0:
+            done[j.key] = f
     return done
 
 
-def _aria2c(items: list[tuple[Recording, str]], dest: Path, connections: int) -> None:
+def _aria2c(jobs: list[Job], dest: Path, connections: int) -> None:
     listing = dest / "aria2_input.txt"
-    listing.write_text("".join(f"{r.url}\n  out={n}.mp4\n" for r, n in items), encoding="utf-8")
+    listing.write_text("".join(f"{j.url}\n  out={j.name}\n" for j in jobs), encoding="utf-8")
     try:
         subprocess.run(["aria2c", f"--input-file={listing}", f"--dir={dest}", "--continue=true",
                         "--max-concurrent-downloads=4", f"--max-connection-per-server={connections}",
                         f"--split={connections}", "--auto-file-renaming=false", "--allow-overwrite=false",
                         "--disable-ipv6=true", "--console-log-level=warn", "--summary-interval=0",
-                        "--download-result=hide"], check=False)
+                        "--download-result=hide"], check=False, stdout=sys.stderr)   # stdout resta libero per --json
     finally:
         listing.unlink(missing_ok=True)         # contiene i link firmati: non lo si lascia in giro
 
@@ -214,9 +234,10 @@ def _python_download(url: str, dst: Path) -> None:
     part.replace(dst)
 
 
-def _ffmpeg_hls(url: str, dst: Path) -> None:
-    tmp = dst.with_name(dst.stem + ".part.mp4")
-    res = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", url, "-c", "copy", str(tmp)],
+def _ffmpeg_hls(url: str, dst: Path, audio_only: bool = False) -> None:
+    tmp = dst.with_name(dst.stem + ".part" + dst.suffix)
+    streams = ["-vn", "-c:a", "copy"] if audio_only else ["-c", "copy"]
+    res = subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", url, *streams, str(tmp)],
                          capture_output=True, text=True)
     if res.returncode == 0 and tmp.exists():
         tmp.replace(dst)

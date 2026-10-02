@@ -27,7 +27,7 @@ class NeedsHuman(Exception):
 
     def __init__(self, message: str, action: str | None = None):
         super().__init__(message)
-        self.action = action  # comando o istruzione suggerita, es. "sbob cookie ticket <valore>"
+        self.action = action  # comando o istruzione suggerita, es. "sbob login"
 
 
 @dataclass

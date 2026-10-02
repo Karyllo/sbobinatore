@@ -6,6 +6,10 @@ lingua = "it"
 [audio]
 bitrate = "32k"
 
+[download]
+formato = "video"            # "audio" = solo la voce (mp3 di Webex, molto più leggero), direttamente in audio/
+                             # si può mettere anche per un singolo corso: formato = "audio" in [corsi.<slug>]
+
 # ---------------------------------------------------------------- modelli per ruolo
 # Ogni ruolo sceglie provider e modello in modo indipendente. Si possono sovrascrivere da CLI
 # (es. `sbob appunti elettronica --notes anthropic:claude-sonnet-5-5`).

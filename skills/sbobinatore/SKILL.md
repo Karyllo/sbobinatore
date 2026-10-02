@@ -23,7 +23,7 @@ I file stanno su disco, quindi li leggi direttamente. La CLI serve per **trovare
 - **Non leggere, non stampare e non copiare** questi file, nemmeno in parte (né con `cat`, né con `head`, `grep`, `ls` del contenuto o in qualsiasi altro modo):
   - `~/.config/sbob/webeep_token`, `~/.config/sbob/browser_state.json`, la cartella `~/.config/sbob/browser/`;
   - qualsiasi file `.env` (in particolare `~/.config/sbob/.env`);
-  - il file dei cookie del downloader (`~/Library/Application Support/polimi_recordings_downloader/cookies.json` su macOS, `~/.config/polimi_recordings_downloader/` su Linux).
+  - il file dei cookie `~/.config/sbob/cookies.json` e quello del vecchio downloader (`~/Library/Application Support/polimi_recordings_downloader/cookies.json` su macOS, `~/.config/polimi_recordings_downloader/` su Linux).
 - **Non chiedere mai all'utente** di incollarti cookie, ticket, token, password o chiavi API. Se mancano o sono scaduti (exit 3), indica `sbob login`: l'accesso lo fa l'utente nella finestra del browser. Le chiavi API si aggiungono con `sbob init` o modificando a mano il `.env`, cosa che fa l'utente.
 - Se l'utente incolla comunque una credenziale, non ripeterla e non scriverla in nessun file o comando: suggeriscigli `sbob login`.
 - Per sapere se le credenziali ci sono, usa solo `sbob doctor --json`, che riporta presenza e validità, mai i valori.
@@ -132,7 +132,7 @@ Un corso può avere edizioni passate (stesso docente) in `<corso>/archivio/<anno
 - **Non lanciare `run` su tutti i corsi** senza una conferma esplicita.
 - Prima di comandi che costano (`appunti`, `trascrivi`, `pdf` su molti file), mostra il `--dry-run`.
 - Exit 3 significa che serve l'utente: spiega cosa deve fare e fermati.
-  - Cookie Webex: va copiato da politecnicomilano.webex.com, poi si lancia `sbob cookie ticket <valore>`.
+  - Accesso Webex o WeBeep scaduto: l'utente lancia `sbob login` (si apre il browser, fa l'accesso lui). Non chiedergli mai di copiare cookie.
   - Chiavi API: vanno nel `.env` accanto a `sbob.toml`.
 - `mappa/` è generata: si rigenera con `sbob mappa <slug>`, o con `sbob indice` senza LLM. Non modificarla a mano.
 - Quando citi qualcosa, indica sempre lezione e data, così l'utente può controllare.

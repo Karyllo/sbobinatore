@@ -24,7 +24,7 @@ from sbob.config import Course, Settings
 from sbob.core import naming
 from sbob.core.batch import list_inputs
 from sbob.core.report import NeedsHuman, StepReport
-from sbob.core.status import VIDEO_EXT
+from sbob.core.status import AUDIO_EXT, VIDEO_EXT
 from sbob.steps.base import StepContext
 
 _ID_RE = re.compile(r"[0-9a-f]{32}", re.I)
@@ -34,6 +34,13 @@ FORMA_TO_TIPO = {"lezione": "lez", "esercitazione": "ese", "laboratorio": "lab",
 _TITLE_TIPO = [(re.compile(r"\blab", re.I), "lab"), (re.compile(r"\b(?:esercitazion\w*|ese|es)\b", re.I), "ese"),
                (re.compile(r"\blez", re.I), "lez")]
 LOGIN_ACTION = "sbob login"
+FORMATI = ("video", "audio")
+
+
+def formato_of(ctx: StepContext) -> str:
+    """--formato, poi `formato` del corso, poi [download] formato; default video."""
+    return (ctx.options.get("formato") or ctx.course.extra.get("formato")
+            or ctx.settings.raw.get("download", {}).get("formato") or "video")
 
 
 def set_cookie(settings: Settings, nome: str, valore: str) -> None:
@@ -254,6 +261,10 @@ def run(ctx: StepContext) -> StepReport:
     if tipo is not None and tipo not in naming.TIPI:
         rep.error = f"tipo '{tipo}' non valido ({', '.join(naming.TIPI)})"
         return rep
+    formato = formato_of(ctx)
+    if formato not in FORMATI:
+        rep.error = f"formato '{formato}' non valido (video | audio)"
+        return rep
     manifest = ctx.manifest()
 
     # 1. quali registrazioni ci sono (tutte le fonti) e quali sono nuove
@@ -294,7 +305,8 @@ def run(ctx: StepContext) -> StepReport:
     if relinked and not ctx.dry_run:
         manifest.save()
 
-    existing = [p.stem for p in list_inputs(lay.video, VIDEO_EXT)]
+    # numerazione dopo l'ultima lezione esistente, che sia stata scaricata come video o come audio
+    existing = sorted({p.stem for p in list_inputs(lay.video, VIDEO_EXT) + list_inputs(lay.audio, AUDIO_EXT)})
     names = assign_names(course, existing,
                          {v: tipo or found[v].get("tipo") or "lez" for v in recs},
                          {v: found[v].get("data") or r.created for v, r in recs.items()})
@@ -307,15 +319,16 @@ def run(ctx: StepContext) -> StepReport:
 
     # 3. scarico dei soli nuovi (staging/dl resta tra un giro e l'altro: aria2c riprende i file a metà)
     dl_dir = lay.staging / "dl"
-    ctx.log(f"download: scarico {len(names)} registrazioni…")
-    got = webex.download([(recs[v], s) for v, s in names.items()], dl_dir, log=ctx.log)
-    lay.ensure("video")
+    ctx.log(f"download: scarico {len(names)} registrazioni ({formato})…")
+    got = webex.download([webex.jobs_for(recs[v], s, formato) for v, s in names.items()], dl_dir, log=ctx.log)
+    target = lay.audio if formato == "audio" else lay.video      # audio: il passo `audio` non ha niente da estrarre
+    lay.ensure(target.name)
     for vid, stem in names.items():
         src = got.get(vid)
         if not src:
             rep.fail(stem, "non scaricata (rilancia per riprendere)")
             continue
-        dst = lay.video / f"{stem}.mp4"
+        dst = target / src.name
         shutil.move(str(src), dst)
         videos[vid] = stem
         if found[vid].get("argomento"):

@@ -91,6 +91,8 @@ Quando i cookie scadono, sbob li rinnova da solo senza finestra (`sbob login --r
   sbob link <corso>                     # scrive <corso>/link_archivio.txt (non scarica niente)
   ```
   Come fonte del corso: `sorgenti = [ { tipo = "archivio" }, { tipo = "txt", file = "link.txt" } ]`, così `sbob download` fa tutto da solo e `link.txt` resta come riserva.
+- **Video o solo audio:** di default si scarica il video. Con `sbob download <corso> --formato audio` (oppure `formato = "audio"` nel corso, o in `[download]` per tutti) si scarica solo la voce: pesa da metà a un terzo e va direttamente in `audio/`, pronta per la trascrizione.
+- **Da WeBeep:** se le registrazioni sono link nella pagina del corso, la fonte è `{ tipo = "webeep" }` (legge il corso collegato; con `url = "…course/view.php?id=…&section=…"` solo quella sezione).
 - **A mano, sempre possibile:** `link.txt` nella cartella del corso, un link Webex per riga. Le righe possono contenere anche, separati da tabulazione, data, forma didattica e argomento. Funziona anche quando l'automazione non va.
 
 ### Materiale e fonti diverse
@@ -147,7 +149,7 @@ Con `notebooklm login` fatto (e `[notebook] attivo = true` in `sbob.toml` per av
 I nomi dei file seguono la regola `AAAA-MM-GG_<corso>_<tipo>NN`, per esempio `2026-05-19_edp_lez13`.
 
 ## Crediti
-Il download delle registrazioni usa [polimi_recordings_downloader](https://github.com/paolobasso99/polimi_recordings_downloader) di Paolo Basso (licenza MIT), in un fork con alcune correzioni.
+Il download delle registrazioni riprende il funzionamento di [polimi_recordings_downloader](https://github.com/paolobasso99/polimi_recordings_downloader) di Paolo Basso (licenza MIT).
 
 ## Licenza
 Da definire.
