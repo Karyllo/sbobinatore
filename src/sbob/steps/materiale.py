@@ -361,8 +361,8 @@ def run(ctx: StepContext) -> StepReport:
         rep.notes.append("Nessun materiale: collega il corso a WeBeep (`sbob webeep collega`) o metti i file in materiale/.")
         return rep
     converti = ctx.options.get("converti")
-    if converti is None:                    # default da config: [materiale] converti = false → solo scarico
-        converti = (ctx.settings.raw.get("materiale", {}) or {}).get("converti", True)
+    if converti is None:                    # opzione > `converti` del corso > [materiale] converti (false = solo scarico)
+        converti = ctx.course.extra.get("converti", (ctx.settings.raw.get("materiale", {}) or {}).get("converti", True))
     if not converti:
         rep.notes.append("conversione disattivata: file scaricati ma non convertiti (sbob materiale <corso> --converti)")
         return rep

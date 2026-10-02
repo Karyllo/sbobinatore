@@ -292,6 +292,17 @@ Fino al 2026-10-02 il download passava da prd (polimi_recordings_downloader di P
 - `sbob pianifica [--ora HH:MM|--stato|--rimuovi]` (`pianifica.py`): LaunchAgent `com.sbob.aggiorna` (macOS) che lancia `sbob aggiorna --notifica`; su altri sistemi stampa la riga di cron. Nessun segreto nel plist (solo `SBOB_CONFIG`, PATH, cartella di lavoro). `--notifica` = notifica di sistema (testo fisso) se exit ≠ 0. Il plist è validato con `plutil -lint`; **non** installato dal vero sul Mac dell'utente (spetta a lui).
 - mypy a 0 errori, bloccante in CI.
 
+## Prova completa su Analisi Matematica 1 (2026-10-02/03) e cosa ne è venuto fuori
+Corso 19266 (Monticelli): **nessun archivio recman e nessun link nei moduli**: le 30 registrazioni stanno in un post della bacheca annunci (forum), con link `ldr.php?RCID=` e testo "Lezione 3 parte 2 - 19-09-25". Il download del docente è disattivato per tutte → stream HLS con ffmpeg, in sola audio (`formato = "audio"`, .m4a). Materiale: 212 PDF / 2036 pagine / 654 MB, in gran parte appunti scritti a mano (scansioni senza testo).
+Miglioramenti nati dagli errori:
+- **Fonte `webeep` legge anche i forum** (`_forum_links`, API `mod_forum_*`); il testo del link dà tipo e argomento (`topic_from_label`: via "Lezione N" e la data, restano "parte 2" o l'argomento vero).
+- **File elencato ma 404 sul server** (un PDF del prof. Maluta con nome doppiamente codificato) = `MissingOnServer` → nota, non errore (prima era un fallimento ad ogni giro).
+- **Quota**: `gemini-3-flash-preview` ha ~20 richieste/giorno sul piano gratuito *per modello*, si ricarica alle 9:00 italiane. Ora la trascrizione ha una `riserva` (`gemini-3.8-flash`, altra quota); `QuotaExhausted` non ferma più la catena (i passi dopo lavorano su ciò che esiste: appunti delle lezioni già trascritte, mappa, taccuino); un passo fermato da `NeedsHuman` non perde più `done` (`ctx.last_report`).
+- **Trascrizione di lezioni lunghe**: con ragionamento di default Gemini spendeva 37k token in "thinking" e troncava la risposta → richiesta sprecata + passaggio a segmenti. Ora `thinking = "low"` per il ruolo (il livello si passa all'adapter Gemini) e i segmenti già pagati stanno in `.sbob/cache/trascrizione_<stem>/` (si riprendono dopo la quota).
+- **Rinnovo del ticket Webex**: l'email del Poli si ricava dal profilo WeBeep se manca `[login] email`.
+- `converti` ora anche per corso (`converti = true` in `[corsi.<slug>]`): opzione > corso > `[materiale]`.
+- **Da tenere presente per il materiale scansionato:** la conversione solo-testo (DeepSeek) non serve per le scansioni; servono i modelli a visione, che condividono la quota con la trascrizione. Priorità: prima trascrizione, poi conversione, nei giorni dopo.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).
