@@ -119,6 +119,14 @@ Se per un anno non c'è lo stesso docente, sbob non aggiunge niente e ti avvisa 
 ### Quali corsi sincronizzare
 Su WeBeep sei iscritto a molti corsi: `sbob webeep scegli` mostra l'elenco dell'anno in corso con le spunte e crea in `sbob.toml` solo quelli scelti (i tolti dalle spunte restano, solo scollegati). Poi `sbob aggiorna` fa tutta la catena su quei corsi, uno dopo l'altro.
 
+### Aggiornamento automatico ogni notte
+```bash
+sbob pianifica            # ogni giorno alle 03:00 (cambia con --ora 06:30)
+sbob pianifica --stato
+sbob pianifica --rimuovi
+```
+Su macOS installa un LaunchAgent che lancia `sbob aggiorna` (parte appena il Mac si riattiva, se era in stop). Se serve il login o qualcosa fallisce ti arriva una notifica, e il dettaglio è in `~/.config/sbob/aggiorna.log`. Su Linux stampa la riga da aggiungere a `crontab -e`. Il job non contiene credenziali: sbob legge token e chiavi dai soliti file.
+
 ### Taccuino NotebookLM per corso
 Con `notebooklm login` fatto (e `[notebook] attivo = true` in `sbob.toml` per averlo dentro `sbob run`), `sbob notebook <corso>` crea il taccuino del corso e lo tiene aggiornato:
 - una sorgente per gli **appunti** e una per ogni **cartella** del materiale (le trascrizioni no, sarebbero ridondanti);

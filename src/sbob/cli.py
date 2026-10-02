@@ -475,7 +475,8 @@ def _run_chain(corso: str, steps, *, archivio=None, force=False, dry_run=False, 
 
 
 @app.command()
-def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False):
+def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
+             notifica: Annotated[bool, typer.Option("--notifica", help="Notifica di sistema se serve l'utente o qualcosa è fallito (per il job notturno).")] = False):
     """Esegue la catena completa su tutti i corsi collegati a WeBeep (quelli scelti con `sbob webeep scegli`)."""
     s = _settings()
     slugs = [slug for slug, c in s.corsi.items() if c.webeep_id]
@@ -490,9 +491,35 @@ def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt 
         reports += rs
         if any(r.exit_code == Exit.HUMAN for r in rs):      # login scaduto & co: inutile insistere sugli altri corsi
             break
+    worst = int(max(r.exit_code for r in reports))
+    if notifica and worst:
+        from sbob.pianifica import notify
+
+        notify("sbob", "Serve un tuo intervento (sbob login)" if worst == Exit.HUMAN
+               else "Aggiornamento finito con problemi: vedi il log")
     if as_json:
         _emit(reports, True)
-    raise typer.Exit(int(max(r.exit_code for r in reports)))
+    raise typer.Exit(worst)
+
+
+@app.command()
+def pianifica(ora: Annotated[str, typer.Option("--ora", help="HH:MM")] = "03:00",
+              rimuovi: Annotated[bool, typer.Option("--rimuovi", help="Toglie l'aggiornamento automatico.")] = False,
+              stato: Annotated[bool, typer.Option("--stato", help="Mostra se è installato.")] = False):
+    """Aggiornamento automatico ogni notte (`sbob aggiorna`): LaunchAgent su macOS, riga di cron altrove."""
+    from sbob import pianifica as pj
+
+    try:
+        if stato:
+            err.print(pj.status())
+        elif rimuovi:
+            err.print(pj.remove())
+        else:
+            h, m = pj.parse_time(ora)
+            err.print(pj.install(_settings().path, h, m))
+    except (ValueError, RuntimeError) as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(Exit.ERROR)
 
 
 @app.command()

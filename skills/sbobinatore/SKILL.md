@@ -114,7 +114,7 @@ Un corso può avere edizioni passate (stesso docente) in `<corso>/archivio/<anno
 - Un file unico da caricare su NotebookLM o da dare a un LLM: `sbob merge <slug> --modo monolite --json`. Esce in `merge/`.
 - Temi d'esame: `sbob merge <slug> --modo tde --da materiale --json`.
 - Taccuino NotebookLM del corso, sempre aggiornato (appunti e materiale, una sorgente per cartella; le trascrizioni no): `sbob notebook <slug> --json` (anteprima: `--dry-run`). Con `needs_human` e azione `notebooklm login` serve l'utente. Anni passati solo a comando: `sbob notebook <slug> aggiungi-archivio <anno>`. Non toccare le sorgenti aggiunte a mano.
-- Scegliere i corsi da sincronizzare spetta all'utente (`sbob webeep scegli`, elenco a spunte). Da script: `sbob webeep scegli --id <id>`. Tutti i corsi scelti in una volta: `sbob aggiorna --json`.
+- Scegliere i corsi da sincronizzare spetta all'utente (`sbob webeep scegli`, elenco a spunte). Da script: `sbob webeep scegli --id <id>`. Tutti i corsi scelti in una volta: `sbob aggiorna --json`. L'aggiornamento notturno (`sbob pianifica`) lo installa l'utente: non installarlo né rimuoverlo tu senza che lo chieda.
 - PDF di slide o dispense in Markdown: `sbob pdf <file|cartella> --corso <slug> --json`. Esce in `.sbob/md/` e da lì si trova con `cerca --in materiale`.
 
 ### Qualità

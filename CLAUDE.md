@@ -307,6 +307,10 @@ Lato sbob:
 - **Scelta dei corsi** (`scelta.py`): `sbob webeep scegli [--id N]… [--tutti-gli-anni]` (elenco a spunte dell'anno più recente, pre-spuntati i già collegati; crea `[corsi.<slug>]` con `webeep_id`, `docente` e fonti archivio+link.txt; i tolti dalle spunte si scollegano solo su conferma, i file restano). `sbob aggiorna` = catena completa su tutti i corsi con `webeep_id` (si ferma al primo `NeedsHuman`).
 - **Provato dal vero:** taccuino su FRO (creazione, sorgenti per cartella, secondo run senza modifiche, sostituzione di una sola sorgente), `webeep scegli --id` e `aggiorna --dry-run` su una copia della config. **Non provato:** `aggiungi-archivio` e il limite di sorgenti sul CLI vero (coperti dai test con un finto CLI); `webeep scegli` interattivo (serve un terminale).
 
+## Job notturno e tipi (fatti)
+- `sbob pianifica [--ora HH:MM|--stato|--rimuovi]` (`pianifica.py`): LaunchAgent `com.sbob.aggiorna` (macOS) che lancia `sbob aggiorna --notifica`; su altri sistemi stampa la riga di cron. Nessun segreto nel plist (solo `SBOB_CONFIG`, PATH, cartella di lavoro). `--notifica` = notifica di sistema (testo fisso) se exit ≠ 0. Il plist è validato con `plutil -lint`; **non** installato dal vero sul Mac dell'utente (spetta a lui).
+- mypy a 0 errori, bloccante in CI.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).
