@@ -201,10 +201,12 @@ def merge(corso: str, as_json: JsonOpt = False,
 @app.command()
 def materiale(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
               as_json: JsonOpt = False,
-              modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per la conversione dei PDF")] = None):
+              modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per la conversione dei PDF")] = None,
+              converti: Annotated[Optional[bool], typer.Option("--converti/--senza-conversione",
+                  help="Converte in Markdown (default: [materiale] converti in sbob.toml, altrimenti sì).")] = None):
     """Scarica il materiale da WeBeep (nuovo o modificato) e lo converte in Markdown in <corso>/materiale_md/."""
     _emit([_run_step("materiale", corso, force=force, dry_run=dry_run, only=only, quiet=as_json,
-                     options={"modello": modello})], as_json)
+                     options={"modello": modello, "converti": converti})], as_json)
 
 
 webeep_app = typer.Typer(help="Corsi e materiale su WeBeep (serve `sbob login`).", no_args_is_help=True)

@@ -212,3 +212,16 @@ def test_site_rejects_private_hosts(settings, monkeypatch):
     rep = SR("materiale")
     mat.sync_siti(StepContext(settings, c, quiet=True), rep, SiteHttp())
     assert [f.item for f in rep.failed] == ["http://192.168.1.10/materiale", "file:///etc/passwd"]
+
+
+def test_conversion_can_be_disabled(settings):
+    c = settings.corso("prova")
+    lay = Layout.of(c)
+    (lay.materiale / "A").mkdir(parents=True)
+    (lay.materiale / "A" / "x.txt").write_text("ciao")
+    rep = mat.run(StepContext(settings, c, quiet=True, options={"converti": False}))
+    assert not lay.materiale_md.exists() and any("disattivata" in n for n in rep.notes)
+    settings.raw["materiale"] = {"converti": False}                       # anche da config
+    assert not mat.run(StepContext(settings, c, quiet=True)).done
+    rep = mat.run(StepContext(settings, c, quiet=True, options={"converti": True}))   # --converti vince sulla config
+    assert rep.done == ["A/x.txt.md"]

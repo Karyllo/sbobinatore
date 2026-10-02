@@ -49,6 +49,12 @@ pagine_per_blocco = 8          # pagine per chiamata; un blocco fallito viene ri
 #   model = "qwen-vl-max"
 # NB: l'API DeepSeek è solo testo: non può leggere PDF.
 
+# ---------------------------------------------------------------- materiale
+[materiale]
+converti = true              # false = scarica e basta (si converte a mano con `sbob materiale <corso> --converti`)
+se_finisce_quota = "testo"   # "testo" = prosegue con un modello solo-testo e avvisa; "ferma" = si ferma e riprende dopo
+# File da siti disordinati: scaricali a mano in <corso>/materiale/<cartella a scelta>/, sbob li tratta come gli altri.
+
 # ---------------------------------------------------------------- provider
 # I default (gemini, deepseek, openai, anthropic) sono già definiti; qui si aggiungono o modificano.
 # chiavi = prefisso env: legge PREFISSO_ACCOUNT1..N e PREFISSO.
