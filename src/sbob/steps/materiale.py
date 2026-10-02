@@ -32,7 +32,7 @@ from sbob.llm.cost import CostTracker
 from sbob.llm.registry import Registry, parse_model_override
 from sbob.steps.base import StepContext
 from sbob.tools.pdf2md import DEFAULT_PAGES_PER_BLOCK, convert_pdf, text_fallback_role
-from sbob.webeep.client import safe_path
+from sbob.webeep.client import MissingOnServer, safe_path
 
 PDF_EXT = {".pdf"}
 OFFICE_EXT = {".pptx", ".ppt", ".docx", ".doc", ".xlsx", ".xls", ".odp", ".odt"}
@@ -130,6 +130,9 @@ def sync(ctx: StepContext, rep: StepReport) -> None:
             client.download(f, dst)
         except NeedsHuman:
             raise
+        except MissingOnServer as e:         # rotto su WeBeep: non è un errore di sbob, resta una nota ad ogni giro
+            rep.notes.append(f"{f.relpath}: {e}")
+            continue
         except Exception as e:  # noqa: BLE001
             rep.fail(f.relpath, e)
             continue

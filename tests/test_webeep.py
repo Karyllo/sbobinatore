@@ -5,6 +5,7 @@ from sbob.webeep.client import RemoteFile, WebeepClient, safe_name, safe_path
 
 
 class FakeResp:
+    status_code = 200
     def __init__(self, data=None, chunks=()):
         self._data, self._chunks = data, chunks
     def json(self): return self._data
@@ -82,3 +83,20 @@ def test_download_atomic_and_mtime(tmp_path):
     WebeepClient("T", http).download(f, dst)
     assert dst.read_bytes() == b"abcd" and int(dst.stat().st_mtime) == 1700000000
     assert http.calls[0][1] == {"token": "T"} and not list(dst.parent.glob(".dl-*"))   # nessun temporaneo residuo
+
+
+def test_download_404_is_missing_on_server_and_leaves_nothing(tmp_path):
+    from sbob.webeep.client import MissingOnServer
+
+    class Gone:
+        status_code = 404
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def raise_for_status(self): raise AssertionError("non va chiamato")
+
+    class Http:
+        def get(self, *a, **k): return Gone()
+    f = RemoteFile("S", "", "rotto.pdf", "https://x/rotto", 4, 0)
+    with pytest.raises(MissingOnServer):
+        WebeepClient("T", Http()).download(f, tmp_path / "S" / "rotto.pdf")
+    assert not list((tmp_path / "S").glob("*"))

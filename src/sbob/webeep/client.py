@@ -23,6 +23,10 @@ API = f"{BASE}/webservice/rest/server.php"
 EXCLUDED_MODNAMES = {"page", "forum", "url", "wooclap", "choice", "feedback", "label", "lesson"}
 
 
+class MissingOnServer(RuntimeError):
+    """File elencato da WeBeep ma che il server non trova (404): è rotto lì, non per colpa nostra."""
+
+
 @dataclass(frozen=True)
 class RemoteFile:
     sezione: str
@@ -128,6 +132,8 @@ class WebeepClient:
         try:
             with os.fdopen(fd, "wb") as out, self._http.get(f.url, params={"token": self._token}, stream=True,
                                                             timeout=120) as r:
+                if r.status_code == 404:
+                    raise MissingOnServer("elencato da WeBeep ma non scaricabile (404): file rotto sul server")
                 r.raise_for_status()
                 for chunk in r.iter_content(1 << 16):
                     out.write(chunk)
