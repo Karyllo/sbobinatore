@@ -380,6 +380,26 @@ def aggiungi_corso():
     raise typer.Exit(add_course())
 
 
+@app.command()
+def login(rinnova: Annotated[bool, typer.Option("--rinnova", help="Senza finestra: rinnova token e ticket se la sessione di Ateneo è ancora valida.")] = False,
+          as_json: JsonOpt = False):
+    """Accesso di Ateneo in una finestra di Chrome: salva token WeBeep e cookie Webex, senza incollare niente."""
+    from sbob.auth.browser import login as do_login
+
+    try:
+        with _stdout_guard(as_json):
+            got = do_login(_settings(), headless=rinnova, log=lambda m: err.print(m))
+    except NeedsHuman as e:
+        rep = StepReport(step="login", needs_human=str(e), action=e.action)
+        _emit([rep], as_json)
+        return
+    rep = StepReport(step="login", done=[k for k, v in got.items() if v],
+                     notes=[f"non ottenuto: {k}" for k, v in got.items() if not v])
+    if not got["webeep_token"]:
+        rep.error = "token WeBeep non ottenuto"
+    _emit([rep], as_json)
+
+
 @app.command("installa-skill")
 def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascrive una skill già presente.")] = False):
     """Installa la skill per Claude Code in ~/.claude/skills/sbobinatore (così Claude sa usare sbob)."""

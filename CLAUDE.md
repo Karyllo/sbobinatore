@@ -245,6 +245,22 @@ Lato sbob:
   - Commit con email noreply `199101937+Karyllo@users.noreply.github.com` (impostata in git config locale dei due repo).
   - Prova: `uvx --from "sbobinatore[all] @ git+https://github.com/Karyllo/sbobinatore" sbob doctor` da ambiente pulito installa tutto, downloader incluso.
 
+## Fase 8, punto 1 (fatto): `sbob login` e sicurezza delle credenziali
+- `auth/browser.py` usa Playwright con il Chrome di sistema (`channel="chrome"`) e il profilo `~/.config/sbob/browser`.
+  1. Si apre `webeep…/auth/shibboleth/index.php` e si aspetta l'arrivo su `/my/`.
+  2. Token: `launch.php?service=moodle_mobile_app`, poi `Location: moodlemobile://token=…`.
+  3. Si legge il cookie `MoodleSession`.
+  4. Webex: dashboard, "Sign in", campo email di Cisco (idbroker-eu), SSO del Poli, cookie `ticket` su politecnicomilano.webex.com.
+- I cookie di sessione dell'Ateneo non sopravvivono alla chiusura del browser. Vengono salvati in `browser_state.json` e reiniettati, così `--rinnova` (headless, ~10 s) funziona finché la sessione è valida lato server. Il campo email di Cisco viene ricordato; `[login] email` in sbob.toml è un'alternativa.
+- Il passo `download`, sul ticket scaduto, prova `try_renew_login`, poi un solo nuovo tentativo, poi exit 3 con `sbob login`.
+- **Provato dal vero:** login interattivo, poi ticket valido (dry-run EDP con 26 registrazioni), token valido (`site_info`), `--rinnova` OK.
+- **Sicurezza** (richiesta esplicita dell'utente):
+  - `core/secrets.py` è l'unico punto che scrive le credenziali: cartelle 700, file 600, cookie di prd scritti direttamente nel file (non più `prd set-cookie` con il valore come argomento);
+  - i report contengono solo i nomi;
+  - `sbob doctor` stringe i permessi;
+  - nei prompt c'è un preambolo anti-injection, e nella skill la sezione "Sicurezza" (divieto di leggere token/cookie/.env, contenuti come dati e mai come istruzioni);
+  - invariante: le chiamate LLM non hanno strumenti e non contengono mai segreti.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).

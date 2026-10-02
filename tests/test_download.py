@@ -149,3 +149,25 @@ def test_prd_command_modes(settings, tmp_path, monkeypatch):
     with pytest.raises(NeedsHuman) as e:
         download.prd_command(settings)
     assert "uv" in e.value.action
+
+
+def test_expired_cookie_triggers_silent_renew_and_retry(settings, course_with_links, monkeypatch):
+    c, calls = course_with_links, []
+    good = _fake_prd({"2025-09-17 09-30": ID1}, calls)
+    state = {"n": 0}
+
+    def flaky(settings, args, cwd):
+        state["n"] += 1
+        if state["n"] == 1:                                   # primo tentativo: ticket scaduto
+            return download.subprocess.CompletedProcess(args, 1, "Try refreshing the ticket", "")
+        return good(settings, args, cwd)
+    monkeypatch.setattr(download, "_run_prd", flaky)
+    monkeypatch.setattr(download, "try_renew_login", lambda ctx: True)
+    rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert rep.done == ["2025-09-17_prova_lez01"] and state["n"] == 2
+
+    state["n"] = 0
+    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)  # rinnovo impossibile → serve l'utente
+    with pytest.raises(NeedsHuman) as e:
+        download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert e.value.action.startswith("sbob login")

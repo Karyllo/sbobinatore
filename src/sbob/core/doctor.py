@@ -124,6 +124,39 @@ def check_downloader(settings: Settings, quick: bool = False) -> list[dict]:
     return out
 
 
+def check_secrets() -> list[dict]:
+    """Permessi dei file con credenziali: se sono larghi li stringe subito (operazione sicura e idempotente)."""
+    from sbob.core.secrets import secure_permissions
+
+    fixed = secure_permissions()
+    return [_check("permessi credenziali", True,
+                   f"sistemati {len(fixed)} percorsi (ora solo tu puoi leggerli)" if fixed else "solo tu puoi leggerli")]
+
+
+def check_login() -> list[dict]:
+    from sbob.auth.browser import PROFILE_DIR, load_token
+
+    token = load_token()
+    ok, det = False, "nessun token (WeBeep non raggiungibile da sbob)"
+    if token:
+        try:
+            import requests
+            r = requests.post("https://webeep.polimi.it/webservice/rest/server.php",
+                              data={"wstoken": token, "wsfunction": "core_webservice_get_site_info",
+                                    "moodlewsrestformat": "json"}, timeout=15).json()
+            ok = "userid" in r
+            det = "token valido" if ok else f"token non valido ({r.get('errorcode')})"
+        except Exception as e:  # noqa: BLE001
+            det = f"verifica non riuscita: {e}"
+    out = [_check("token WeBeep", ok, det, "sbob login", opzionale=True),
+           _check("profilo login", PROFILE_DIR.exists(),
+                  "rinnovo automatico di ticket e cookie" if PROFILE_DIR.exists() else "mai eseguito `sbob login`",
+                  "sbob login", opzionale=True),
+           _check("playwright", _has("playwright"), "per sbob login",
+                  'uv tool install --reinstall "sbobinatore[all]"', opzionale=True)]
+    return out
+
+
 def check_optional(settings: Settings) -> list[dict]:
     out = []
     if any(c.trascrizione == "notebooklm" for c in settings.corsi.values()):
@@ -134,4 +167,4 @@ def check_optional(settings: Settings) -> list[dict]:
 
 def run_checks(settings: Settings, quick: bool = False) -> list[dict[str, Any]]:
     return [*check_config(settings), *check_binaries(), *check_models(settings),
-            *check_downloader(settings, quick), *check_optional(settings)]
+            *check_downloader(settings, quick), *check_secrets(), *check_login(), *check_optional(settings)]

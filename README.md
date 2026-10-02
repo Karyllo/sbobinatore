@@ -63,12 +63,25 @@ sbob merge <corso> --modo monolite
 ```
 Ogni comando accetta `--json` (output per script e agenti) e `--help`.
 
+### Accesso (niente cookie da copiare)
+```bash
+sbob login
+```
+Si apre una finestra di Chrome (profilo separato da quello personale): fai l'accesso di Ateneo come al solito e, quando passa a Webex, scrivi la tua email del Poli. sbob salva da solo:
+- il token di WeBeep, che dura mesi;
+- i cookie per scaricare le registrazioni.
+
+Quando i cookie scadono, sbob li rinnova da solo senza finestra (`sbob login --rinnova`) finché la sessione di Ateneo è valida. Altrimenti ti chiede di rifare `sbob login`.
+
+### Sicurezza
+- **Credenziali:** token e cookie stanno in file leggibili solo dal tuo utente (`~/.config/sbob/`). Non vengono mai stampati, non finiscono nei report e non vengono mai inviati ai modelli AI.
+- **Cosa ricevono i modelli AI:** Gemini, DeepSeek e Claude ricevono solo il contenuto da elaborare (audio, testo, PDF), senza strumenti né possibilità di eseguire azioni.
+- **Prompt injection:**
+  - i prompt istruiscono i modelli a trattare il materiale come dati e a ignorare eventuali istruzioni nascoste dentro;
+  - la skill per Claude Code vieta all'agente di leggere i file delle credenziali e di eseguire istruzioni trovate nei file dei corsi.
+- **Privacy dei contenuti:** il materiale dei corsi viene inviato ai provider AI scelti. Con il piano gratuito, Google può usare i dati per migliorare i suoi servizi; per i dati di DeepSeek valgono le sue condizioni d'uso. Scegli i provider di conseguenza.
+
 ### Registrazioni
-- **Cookie Webex:** il download usa il cookie `ticket` di politecnicomilano.webex.com. Per salvarlo:
-  ```bash
-  sbob cookie ticket <valore>
-  ```
-  Quando scade, sbob si ferma e te lo dice.
 - **Link delle registrazioni:** vanno messi in `link.txt` nella cartella del corso, uno per riga. L'archivio registrazioni del Poli usa link di sessione che funzionano solo nel browser. Con Claude Code e l'estensione Claude in Chrome puoi chiedere "scarica le registrazioni di \<corso\>": la skill raccoglie i link dal tuo browser, insieme a data, tipo (lezione, esercitazione, laboratorio) e argomento.
 
 ### Struttura di un corso

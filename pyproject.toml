@@ -20,14 +20,15 @@ anthropic = ["anthropic>=0.40"]
 whisper = ["mlx-whisper>=0.4"]   # backend non mantenuto, per chi forka
 pdf = ["pymupdf>=1.24", "pillow>=10"]
 html = ["markdownify>=0.13"]
-all = ["sbobinatore[gemini,openai,anthropic,pdf,html]"]
+login = ["playwright>=1.45"]   # sbob login: accesso di Ateneo nel Chrome di sistema, senza incollare cookie
+all = ["sbobinatore[gemini,openai,anthropic,pdf,html,login]"]
 
 [project.scripts]
 sbob = "sbob.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "google-genai>=1.0", "openai>=1.40", "anthropic>=0.40", "markdownify>=0.13",
-       "pymupdf>=1.24", "pillow>=10"]
+       "pymupdf>=1.24", "pillow>=10", "playwright>=1.45"]
 
 [build-system]
 requires = ["hatchling"]

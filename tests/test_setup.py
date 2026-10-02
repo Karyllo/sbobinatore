@@ -38,6 +38,7 @@ def test_doctor_reports_missing_with_fix(settings, monkeypatch):
     import os
     for k in [k for k in os.environ if k.startswith("GOOGLE_API_KEY")]:
         monkeypatch.delenv(k)
+    monkeypatch.setattr(doctor, "check_login", lambda: [])             # niente rete nei test
     checks = {c["nome"]: c for c in doctor.run_checks(settings, quick=True)}
     assert checks["ffmpeg"]["stato"] == "manca" and "ffmpeg" in checks["ffmpeg"]["rimedio"]
     assert checks["chiavi gemini"]["stato"] == "manca" and "GOOGLE_API_KEY_ACCOUNT1" in checks["chiavi gemini"]["rimedio"]

@@ -58,10 +58,17 @@ def _run_prd(settings: Settings, args: list[str], cwd: Path) -> subprocess.Compl
     return subprocess.run([*cmd, *args], cwd=cwd, text=True, capture_output=True, env=env)
 
 
+ALLOWED_COOKIES = ("ticket", "MoodleSession", "JSESSIONID", "INGRESSCOOKIE", "SSL_JSESSIONID")
+
+
 def set_cookie(settings: Settings, nome: str, valore: str) -> None:
-    res = _run_prd(settings, ["set-cookie", nome, valore], Path.home())
-    if res.returncode != 0:
-        raise RuntimeError((res.stdout + res.stderr).strip() or "set-cookie fallito")
+    """Salva un cookie per il downloader scrivendo direttamente il suo file (permessi 600): il valore non passa
+    sulla riga di comando di un sottoprocesso, dove sarebbe visibile ad altri processi."""
+    from sbob.core.secrets import save_prd_cookie
+
+    if nome not in ALLOWED_COOKIES:
+        raise ValueError(f"cookie non gestito: {nome} (validi: {', '.join(ALLOWED_COOKIES)})")
+    save_prd_cookie(nome, valore.strip())
 
 
 def read_links_file(path: Path) -> tuple[list[str], dict[str, dict]]:
@@ -135,10 +142,26 @@ def _check_output(res: subprocess.CompletedProcess, tipo: str | None = None) -> 
                                 or "zero recordings" in lowered or any(m in lowered for m in _TICKET_MSGS)):
         needed = " e ".join(COOKIES_FOR_SOURCE.get(tipo or "", ("ticket",)))
         raise NeedsHuman(f"Cookie scaduti o mancanti (per questa sorgente servono: {needed})",
-                         action=cookie_help(tipo))
+                         action="sbob login  (oppure, a mano: " + cookie_help(tipo) + ")")
     if res.returncode != 0:
         tail = [l for l in text.strip().splitlines() if l.strip()][-3:]
         raise RuntimeError("prd fallito: " + " | ".join(tail))
+
+
+def try_renew_login(ctx: StepContext) -> bool:
+    """Rinnovo silenzioso di ticket e cookie tramite il profilo di `sbob login`. False se non è possibile."""
+    try:
+        from sbob.auth.browser import PROFILE_DIR, login
+    except ImportError:
+        return False
+    if not PROFILE_DIR.exists():
+        return False
+    ctx.log("download: cookie scaduti, provo a rinnovarli con `sbob login --rinnova`…")
+    try:
+        got = login(ctx.settings, headless=True, log=ctx.log)
+    except Exception:  # noqa: BLE001 — sessione di Ateneo scaduta, Playwright assente, rete…
+        return False
+    return bool(got.get("ticket"))
 
 
 def read_plan(staging_plan: Path) -> dict[str, dict[str, str | None]]:
@@ -190,8 +213,15 @@ def run(ctx: StepContext) -> StepReport:
     shutil.rmtree(plan_dir, ignore_errors=True)
     args, link_meta = _source_args(course, ctx.options, course.cartella, lay.staging)
     ctx.log("download: leggo l'elenco delle registrazioni…")
-    _check_output(_run_prd(ctx.settings, [*args, "--no-aria2c", "--create-xlsx", "--output", str(plan_dir)],
-                           lay.state), course.sorgente.get("tipo"))
+    plan_args = [*args, "--no-aria2c", "--create-xlsx", "--output", str(plan_dir)]
+    try:
+        _check_output(_run_prd(ctx.settings, plan_args, lay.state), course.sorgente.get("tipo"))
+    except NeedsHuman:
+        # cookie scaduti: se c'è un profilo di `sbob login`, si rinnovano da soli e si riprova una volta
+        if not try_renew_login(ctx):
+            raise
+        shutil.rmtree(plan_dir, ignore_errors=True)
+        _check_output(_run_prd(ctx.settings, plan_args, lay.state), course.sorgente.get("tipo"))
     plan = read_plan(plan_dir)
     for info in plan.values():                   # metadati del file di link (archivio): prevalgono
         extra = link_meta.get(info["id"].lower(), {})
