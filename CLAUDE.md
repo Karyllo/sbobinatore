@@ -229,9 +229,9 @@ Lato sbob:
 - CLI: `uv tool install -e ".[gemini,openai,anthropic,pdf,html]"`, eseguibile in `~/.local/bin/sbob` (editable, segue il repo). Se si aggiungono dipendenze, rilanciare lo stesso comando.
 - **Manca la config globale** `~/.config/sbob/sbob.toml`: da fuori dal repo `sbob corsi` non vede corsi. Va scritta con l'utente (i path dei corsi veri), senza migrare dati.
 
-## Installazione "plug and play" (preparata, pubblicazione rimandata dall'utente)
+## Installazione "plug and play" e pubblicazione
 - Downloader: `downloader` in sbob.toml può essere un clone con `.venv`, oppure una cartella o un indirizzo git. In questi ultimi casi `uv run --no-project --with <spec> python -m prd`.
-  Il default `DEFAULT_DOWNLOADER` è il fork `git+https://github.com/Karyllo/polimi_recordings_downloader@local-fixes`, **che non esiste ancora**: va creato quando l'utente pubblica.
+  Il default `DEFAULT_DOWNLOADER` è il fork `git+https://github.com/Karyllo/polimi_recordings_downloader@local-fixes`, pubblicato il 2026-10-02 (fork pubblico di paolobasso99, branch `local-fixes`).
   Il fork (branch `local-fixes` nel clone) contiene anche:
   - `packages = [{include="prd"}]` più lo script `prd`, perché la build upstream fallisce;
   - `click<8.2`, perché typer 0.6 si rompe con click recente;
@@ -240,7 +240,10 @@ Lato sbob:
   Provato con `git+file://…@local-fixes`: installa, avvia e arriva fino all'API Webex.
 - `sbob doctor` (`core/doctor.py`), `sbob init` e `sbob aggiungi-corso` (`setup.py`, scrivono `~/.config/sbob/{sbob.toml,.env}`, con `.env` in modalità 600), `sbob installa-skill` (la skill entra nel wheel con force-include).
 - I default personali sono stati tolti: root `~/sbob`, downloader il fork.
-- README con installazione in 4 passi. Licenza ancora da decidere (l'utente ha detto "aspetta").
+- README con installazione in 4 passi.
+- **Pubblicato il 2026-10-02:** `github.com/Karyllo/sbobinatore` (pubblico, **senza licenza** per scelta dell'utente: da decidere più avanti; finché manca non accettare contributi esterni) e il fork `github.com/Karyllo/polimi_recordings_downloader`.
+  - Commit con email noreply `199101937+Karyllo@users.noreply.github.com` (impostata in git config locale dei due repo).
+  - Prova: `uvx --from "sbobinatore[all] @ git+https://github.com/Karyllo/sbobinatore" sbob doctor` da ambiente pulito installa tutto, downloader incluso.
 
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
