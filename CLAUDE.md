@@ -277,6 +277,19 @@ Lato sbob:
   - Bug trovato e corretto: `tipo` non riconosceva `laboratori`/`Lab03`.
 - **Non ancora provato:** conversione `solo testo` con quota esaurita su dati veri (provata solo nei test), `.pptx` con LibreOffice, un sito personale reale.
 
+## Fase 8, punto 5 (fatto): archivio recman automatico
+- Scoperta: ogni corso WeBeep ha il modulo URL "Archivio registrazioni" → `aunicalogin…/getservizio.xml?id_servizio=2294&c_classe_webeep=<classe>`. È stabile e ce l'hanno anche i corsi degli anni passati. Dal browser di `sbob login` (anche headless) passa dall'accesso di Ateneo e apre recman con una sessione valida.
+- `auth/recman.py`:
+  - `archive_entries` prende i moduli via API (`is_archive_url`; attenzione: nella pagina c'è anche `id_servizio=2292` = assistenza);
+  - `collect` carica la vista "tutte", legge le righe e risolve ogni "Riproduci" con `ctx.request.get(max_redirects=0)` (header Location), con ripiego sulla navigazione vera;
+  - `write_links` usa lo stesso formato arricchito di link.txt.
+- Fonte `{tipo = "archivio"}` (con `webeep_id` o `url`) in `download.archive_links`: scrive `<corso>/link_archivio.txt` e poi procede come una fonte txt. `sbob link <corso> [--url]` raccoglie e basta.
+- **Provato dal vero:**
+  - Fisica Sper. II: 10/10 in 23 s;
+  - EDP: 26/26 identiche (ID, date, forme) alla raccolta manuale con Claude in Chrome, in 51 s;
+  - `sbob download edp --dry-run` con `sorgenti = [archivio, txt]`: 26 pianificate, nessun duplicato.
+- Il metodo `link.txt` resta la base e la riserva (richiesta esplicita dell'utente). La procedura con Claude in Chrome resta in SKILL.md come ultima riserva.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).

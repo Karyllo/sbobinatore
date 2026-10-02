@@ -82,7 +82,13 @@ Quando i cookie scadono, sbob li rinnova da solo senza finestra (`sbob login --r
 - **Privacy dei contenuti:** il materiale dei corsi viene inviato ai provider AI scelti. Con il piano gratuito, Google può usare i dati per migliorare i suoi servizi; per i dati di DeepSeek valgono le sue condizioni d'uso. Scegli i provider di conseguenza.
 
 ### Registrazioni
-- **Link delle registrazioni:** vanno messi in `link.txt` nella cartella del corso, uno per riga. L'archivio registrazioni del Poli usa link di sessione che funzionano solo nel browser. Con Claude Code e l'estensione Claude in Chrome puoi chiedere "scarica le registrazioni di \<corso\>": la skill raccoglie i link dal tuo browser, insieme a data, tipo (lezione, esercitazione, laboratorio) e argomento.
+- **Dall'archivio del Poli, in automatico:** dopo `sbob login`, sbob legge l'archivio registrazioni del corso (dal modulo WeBeep) e raccoglie link, data, tipo (lezione, esercitazione, laboratorio) e argomento:
+  ```bash
+  sbob webeep collega <corso> <id>      # una volta
+  sbob link <corso>                     # scrive <corso>/link_archivio.txt (non scarica niente)
+  ```
+  Come fonte del corso: `sorgenti = [ { tipo = "archivio" }, { tipo = "txt", file = "link.txt" } ]`, così `sbob download` fa tutto da solo e `link.txt` resta come riserva.
+- **A mano, sempre possibile:** `link.txt` nella cartella del corso, un link Webex per riga. Le righe possono contenere anche, separati da tabulazione, data, forma didattica e argomento. Funziona anche quando l'automazione non va.
 
 ### Materiale e fonti diverse
 Il materiale del corso (slide, esercitazioni, temi d'esame) si scarica da WeBeep e si converte in Markdown, con formule in LaTeX e figure trascritte:

@@ -199,6 +199,28 @@ def merge(corso: str, as_json: JsonOpt = False,
 
 
 @app.command()
+def link(corso: str, as_json: JsonOpt = False,
+         url: Annotated[Optional[str], typer.Option(help="Link all'archivio (modulo WeBeep o getservizio); default: dal corso WeBeep collegato.")] = None):
+    """Raccoglie i link delle registrazioni dall'archivio del Poli e li scrive in <corso>/link_archivio.txt (nessun download)."""
+    from sbob.steps.download import archive_links
+
+    s = _settings()
+    try:
+        course = s.corso(corso)
+        ctx = StepContext(s, course, quiet=as_json)
+        course.cartella.mkdir(parents=True, exist_ok=True)
+        with _stdout_guard(as_json):
+            path = archive_links(ctx, {"tipo": "archivio", **({"url": url} if url else {})})
+        n = sum(1 for l in path.read_text().splitlines() if l.strip() and not l.startswith("#"))
+        rep = StepReport(step="link", corso=corso, done=[f"{n} registrazioni"], outputs=[str(path)])
+    except NeedsHuman as e:
+        rep = StepReport(step="link", corso=corso, needs_human=str(e), action=e.action)
+    except (ConfigError, RuntimeError) as e:
+        rep = StepReport(step="link", corso=corso, error=str(e))
+    _emit([rep], as_json)
+
+
+@app.command()
 def materiale(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
               as_json: JsonOpt = False,
               modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per la conversione dei PDF")] = None,

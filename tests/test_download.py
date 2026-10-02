@@ -219,3 +219,38 @@ sorgenti = [ { tipo = "webeep", url = "u" }, { tipo = "webpage-url", url = "http
     s = load_settings(cfg)
     assert [x["tipo"] for x in s.corso("a").sorgenti] == ["txt"] and s.corso("a").sorgente["tipo"] == "txt"
     assert [x["tipo"] for x in s.corso("b").sorgenti] == ["webeep", "webpage-url"]
+
+
+def test_archivio_source_writes_link_file_and_reuses_txt_path(settings, course_with_links, monkeypatch):
+    from sbob.auth import recman
+    c, calls = course_with_links, []
+    c.sorgenti = [{"tipo": "archivio", "url": "https://aunicalogin.polimi.it/aunicalogin/getservizio.xml?id_servizio=2294&c_classe_webeep=1-STD"}]
+    rows = [{"webex": f"https://politecnicomilano.webex.com/recordingservice/sites/x/recording/{ID1}/playback",
+             "data": "08/05/2026 10:33", "forma": "Laboratorio", "argomento": "Lab 3"}]
+    monkeypatch.setattr(recman, "collect", lambda entry, headless=True, log=None: rows)
+    monkeypatch.setattr(download, "_run_prd", _fake_prd({"2026-05-10 01-45": ID1}, calls))
+    rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert rep.done == ["2026-05-08_prova_lab01"]                       # data e tipo dall'archivio
+    text = (c.cartella / "link_archivio.txt").read_text()
+    assert ID1 in text and "Laboratorio\tLab 3" in text                  # file riusabile a mano (fallback)
+
+
+def test_archivio_without_course_link_needs_human(settings, course_with_links):
+    c = course_with_links
+    c.sorgenti, c.webeep_id = [{"tipo": "archivio"}], None
+    with pytest.raises(NeedsHuman) as e:
+        download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert "webeep collega" in e.value.action
+
+
+def test_recman_helpers():
+    from sbob.auth.recman import archive_entries, is_archive_url
+    good = "https://aunicalogin.polimi.it/aunicalogin/getservizio.xml?id_servizio=2294&c_classe_webeep=890169-STD"
+    assert is_archive_url(good) and not is_archive_url("https://aunicalogin.polimi.it/aunicalogin/getservizio.xml?id_servizio=2292")
+
+    class C:
+        def call(self, fn, **kw):
+            return [{"modules": [{"modname": "url", "contents": [{"fileurl": good}]},
+                                 {"modname": "url", "contents": [{"fileurl": "https://altro.it"}]},
+                                 {"modname": "resource", "contents": [{"fileurl": good}]}]}]
+    assert archive_entries(C(), 1) == [good]

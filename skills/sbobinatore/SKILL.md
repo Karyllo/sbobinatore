@@ -74,19 +74,19 @@ I file stanno su disco, quindi li leggi direttamente. La CLI serve per **trovare
 
 Puoi lanciare anche un solo passo: `sbob audio|trascrivi|appunti|mappa <slug> [--solo <stem>] [--force] --json`.
 
-### Registrazioni dall'archivio del Poli (recman) tramite Chrome
-L'archivio `onlineservices.polimi.it/recman_frontend/...` usa codici di sessione monouso. Fuori dal browser dell'utente risponde con errore `POLIJ_049001`, quindi `sorgente = archives` non funziona. Procedura con **Claude in Chrome**, solo dopo il consenso dell'utente, in sola lettura:
-1. Chiedi all'utente il link dell'archivio, quello che si apre da WeBeep. Aprilo in una scheda nuova e verifica che `tbody.TableDati-tbody` esista. In caso di `POLIJ_...` serve un link fresco.
-2. Con `javascript_tool`:
-   - trova il link `a.paginator_link` che contiene `action=plen_0` (la vista "tutte") e caricalo con `fetch(..., {credentials:"include"})`;
-   - leggi le righe: `td[1]` = data `dd/mm/yyyy HH:MM`, `td[3]` = forma didattica, `td[4]` = argomento, `td[0] a.Link` = link "Riproduci";
-   - salva l'elenco in `sessionStorage`. Lo strumento non restituisce URL con codici di sessione, ed è giusto così.
-3. Per ogni riga: con JS imposta `location.href` sul link "Riproduci", aspetta 3 secondi, poi leggi con `tabs_context_mcp` l'URL Webex finale (`.../recording/<id>/playback`). Per tornare **riapri il link dell'archivio**: "indietro" non funziona, perché Webex riscrive la cronologia.
-4. Scrivi `<corso>/link.txt`, una riga per registrazione: `link<TAB>dd/mm/yyyy HH:MM<TAB>forma<TAB>argomento` (le righe con `#` sono commenti). Chiudi la scheda e svuota `sessionStorage`.
-5. `sbob download <corso> --dry-run --json`, mostra i nomi all'utente, poi lancia senza `--dry-run`.
-   - La data dell'archivio prevale su quella di Webex, che a volte è sbagliata.
-   - La forma didattica decide il tipo: `lez`, `lab`, `ese`.
-   - L'argomento va nel frontmatter.
+### Registrazioni dall'archivio del Poli (recman)
+**Automatico (prima scelta).** Con `sbob login` fatto, sbob apre l'archivio senza finestra partendo dal modulo "Archivio registrazioni" del corso WeBeep:
+- `sbob link <slug> --json`: raccoglie tutte le registrazioni (link Webex, data, forma didattica, argomento) e scrive `<corso>/link_archivio.txt`, senza scaricare niente. Con `--url <link del modulo WeBeep>` usa un link preciso.
+- Come fonte del corso: `sorgenti = [ { tipo = "archivio" }, { tipo = "txt", file = "link.txt" } ]` (serve `webeep_id`). `sbob download` raccoglie e scarica; il `link.txt` fatto a mano resta come riserva e i duplicati si uniscono.
+- Se esce exit 3 con `sbob login`, la sessione di Ateneo è scaduta: l'accesso lo fa l'utente.
+
+**Riserva sempre valida: il file di link.** `link.txt` (o `link_archivio.txt`), una riga per registrazione: `link Webex` oppure `link<TAB>dd/mm/yyyy HH:MM<TAB>forma<TAB>argomento`. Le righe con `#` sono commenti. Funziona anche quando l'automazione non va.
+
+**Ultima riserva: Claude in Chrome**, solo con il consenso dell'utente e in sola lettura, se `sbob link` non funziona:
+1. apri il link dell'archivio da WeBeep;
+2. con `javascript_tool` carica la vista "tutte" (`a.paginator_link` con `action=plen_0`) e leggi `td[1]` = data, `td[3]` = forma, `td[4]` = argomento, `td[0] a.Link` = "Riproduci"; salva l'elenco in `sessionStorage`;
+3. per ogni riga imposta `location.href` su "Riproduci", aspetta e leggi con `tabs_context_mcp` l'URL Webex finale; per tornare riapri il link dell'archivio ("indietro" non funziona);
+4. scrivi il file di link nel formato sopra, chiudi la scheda e svuota `sessionStorage`.
 
 ### Materiale del corso (slide, esercitazioni, temi d'esame)
 Il materiale convertito in Markdown sta in `<corso>/materiale_md/` (stessa struttura di `materiale/`, che contiene gli originali). Ogni file ha il frontmatter `tipo` (`slide`, `esercitazione`, `laboratorio`, `tde`) e `conversione`:

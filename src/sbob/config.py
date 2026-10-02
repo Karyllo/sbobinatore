@@ -27,7 +27,7 @@ DEFAULT_DOWNLOADER = "git+https://github.com/Karyllo/polimi_recordings_downloade
 DEFAULT_ROOT = "~/sbob"
 
 # Tipi di sorgente registrazioni supportati dal passo download
-SOURCE_TYPES = {"txt", "webeep", "webpage-url", "webpage-html", "archives"}
+SOURCE_TYPES = {"txt", "webeep", "webpage-url", "webpage-html", "archives", "archivio"}
 TRANSCRIBE_BACKENDS = {"gemini", "notebooklm", "whisper"}  # whisper: non mantenuto
 
 

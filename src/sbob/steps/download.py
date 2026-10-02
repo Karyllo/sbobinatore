@@ -164,9 +164,35 @@ def try_renew_login(ctx: StepContext) -> bool:
     return bool(got.get("ticket"))
 
 
+def archive_links(ctx: StepContext, src: dict, idx: int = 0) -> Path:
+    """Fonte `archivio`: raccoglie i link dall'archivio recman (browser di `sbob login`) e li scrive in
+    <corso>/link_archivio.txt, nel formato di link.txt. Il file resta: si può controllare, correggere o riusare a mano."""
+    from sbob.auth.recman import archive_entries, collect, write_links
+
+    course = ctx.course
+    entries = [src["url"]] if src.get("url") else []
+    if not entries:
+        if not course.webeep_id:
+            raise NeedsHuman(f"Per la fonte 'archivio' serve il corso WeBeep di {course.slug}",
+                             action=f"sbob webeep collega {course.slug} <id>  (oppure url = <link dell'archivio> nella fonte)")
+        from sbob.auth.browser import load_token
+        from sbob.webeep.client import WebeepClient
+        entries = archive_entries(WebeepClient(load_token() or ""), course.webeep_id)
+        if not entries:
+            raise RuntimeError("il corso WeBeep non ha un modulo 'Archivio registrazioni'")
+    rows: list[dict] = []
+    for e in entries:
+        rows += collect(e, headless=True, log=ctx.log)
+    dst = course.cartella / ("link_archivio.txt" if idx == 0 else f"link_archivio_{idx + 1}.txt")
+    write_links(list({r["webex"]: r for r in rows}.values()), dst, "archivio recman")
+    return dst
+
+
 def plan_source(ctx: StepContext, src: dict, idx: int) -> dict[str, dict]:
     """Elenco delle registrazioni di UNA fonte (nessun download), con i metadati del file di link se presenti."""
     lay, course = ctx.layout, ctx.course
+    if src.get("tipo") == "archivio":                # → file di link arricchito, poi come una fonte txt
+        src = {"tipo": "txt", "file": str(archive_links(ctx, src, idx))}
     plan_dir = lay.staging / f"plan{idx}"
     shutil.rmtree(plan_dir, ignore_errors=True)
     args, link_meta = _source_args(course, src, ctx.options, course.cartella, lay.staging, idx)
