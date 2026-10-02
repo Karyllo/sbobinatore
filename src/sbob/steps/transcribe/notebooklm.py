@@ -6,13 +6,12 @@ Vincoli rispettati: max 10 sorgenti in volo, timeout 12 min per sorgente, max 3 
 
 from __future__ import annotations
 
-import json
-import subprocess
 import time
 from dataclasses import dataclass, field
 
+from sbob import notebooklm_cli
 from sbob.core.batch import Job
-from sbob.core.report import NeedsHuman, StepReport
+from sbob.core.report import StepReport
 from sbob.steps.base import StepContext
 from sbob.steps.transcribe.base import write_transcript
 
@@ -20,25 +19,14 @@ MAX_IN_FLIGHT = 10
 SOURCE_TIMEOUT = 12 * 60
 MAX_ATTEMPTS = 3
 POLL_SECONDS = 30
-_AUTH_HINTS = ("login", "auth", "sign in", "expired", "not logged")
 
 
 def _nb(*args: str) -> tuple[str, str, int]:
-    res = subprocess.run(["notebooklm", *args], capture_output=True, text=True)
-    return res.stdout.strip(), res.stderr.strip(), res.returncode
+    return notebooklm_cli.nb(*args)         # indirezione: i test sostituiscono questa funzione
 
 
-def _json(stdout: str) -> dict:
-    try:
-        data = json.loads(stdout)
-        return data if isinstance(data, dict) else {}
-    except json.JSONDecodeError:
-        return {}
-
-
-def _check_auth(stderr: str, rc: int) -> None:
-    if rc != 0 and any(h in stderr.lower() for h in _AUTH_HINTS):
-        raise NeedsHuman("NotebookLM non autenticato", action="notebooklm login")
+_json = notebooklm_cli.parse_json
+_check_auth = notebooklm_cli.check_auth
 
 
 def find_or_create_notebook(title: str) -> str:

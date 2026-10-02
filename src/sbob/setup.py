@@ -93,6 +93,21 @@ def set_course_field(cfg: Path, slug: str, key: str, value: Any) -> None:
     cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def remove_course_field(cfg: Path, slug: str, key: str) -> bool:
+    """Toglie `key` dal blocco [corsi.<slug>] di sbob.toml. True se c'era."""
+    lines = cfg.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, l in enumerate(lines) if l.strip() == f"[corsi.{slug}]"), None)
+    if start is None:
+        return False
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
+    for i in range(start + 1, end):
+        if re.match(rf"\s*{re.escape(key)}\s*=", lines[i]):
+            del lines[i]
+            cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return True
+    return False
+
+
 def needed_providers(preset: str) -> list[str]:
     """Provider di cui servono le chiavi: Gemini sempre (trascrizione e PDF), più quelli degli appunti."""
     p = PRESETS[preset]

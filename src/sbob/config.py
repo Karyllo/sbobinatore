@@ -53,6 +53,8 @@ class Course:
     webeep_id: int | None = None    # id del corso su WeBeep (sbob webeep collega): abilita il passo `materiale`
     archivio: dict[str, int] = field(default_factory=dict)  # edizioni passate: anno → id WeBeep (stesso docente)
     archivio_docente: str | None = None   # docente scelto con `sbob archivio <corso> docenti` (altrimenti quello del corso)
+    docente: str | None = None      # per i titoli dei file uniti (facoltativo)
+    notebook_studio: str | None = None   # titolo del taccuino NotebookLM creato da `sbob notebook`
     archivio_di: str | None = None  # valorizzato solo sul Course derivato di un'edizione passata: slug del corso principale
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -145,7 +147,7 @@ def _parse_course(slug: str, data: dict[str, Any], root: Path, lingua: str) -> C
     if trascrizione not in TRANSCRIBE_BACKENDS:
         raise ConfigError(f"[corsi.{slug}].trascrizione deve essere uno di {sorted(TRANSCRIBE_BACKENDS)}")
 
-    known = {"nome", "anno_accademico", "cartella", "lingua", "sorgente", "sorgenti", "archivio", "archivio_docente", "trascrizione",
+    known = {"nome", "anno_accademico", "cartella", "lingua", "sorgente", "sorgenti", "archivio", "archivio_docente", "docente", "notebook_studio", "trascrizione",
              "notebook", "materiale", "inizio_corso", "webeep_id"}
     return Course(
         slug=slug,
@@ -162,6 +164,8 @@ def _parse_course(slug: str, data: dict[str, Any], root: Path, lingua: str) -> C
         webeep_id=int(data["webeep_id"]) if data.get("webeep_id") else None,
         archivio={str(k): int(v) for k, v in (data.get("archivio") or {}).items()},
         archivio_docente=data.get("archivio_docente"),
+        docente=data.get("docente"),
+        notebook_studio=data.get("notebook_studio"),
         extra={k: v for k, v in data.items() if k not in known},
     )
 

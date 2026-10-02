@@ -168,6 +168,15 @@ def check_optional(settings: Settings) -> list[dict]:
     if any(c.trascrizione == "notebooklm" for c in settings.corsi.values()):
         out.append(_check("notebooklm", bool(shutil.which("notebooklm")), "CLI per il backend notebooklm",
                           "uv tool install notebooklm-py && notebooklm login", opzionale=True))
+    if settings.raw.get("notebook", {}).get("attivo"):
+        from sbob import notebooklm_cli
+
+        if not shutil.which("notebooklm"):
+            out.append(_check("notebooklm", False, "CLI per il taccuino automatico",
+                              "uv tool install notebooklm-py && notebooklm login", opzionale=True))
+        else:
+            ok, det = notebooklm_cli.auth_status()
+            out.append(_check("login notebooklm", ok, det, "notebooklm login", opzionale=True))
     return out
 
 

@@ -83,8 +83,8 @@ def test_dry_run_chain_propagates(settings):
     lay.ensure("video")
     (lay.video / f"{STEM}.mp4").write_text("x")
     d = json.loads(runner.invoke(app, ["run", "prova", "--dry-run", "--json", "--da", "audio"]).stdout)
-    assert [r["step"] for r in d["reports"]] == ["audio", "trascrivi", "appunti", "mappa"]
-    assert [r["done"] for r in d["reports"]] == [[STEM]] * 4
+    assert [r["step"] for r in d["reports"]] == ["audio", "trascrivi", "appunti", "mappa", "notebook"]
+    assert [r["done"] for r in d["reports"]] == [[STEM]] * 4 + [[]]       # notebook: disattivato, non fa niente
 
 
 def test_log_file_has_timestamps_and_traceback_on_crash(settings, monkeypatch):

@@ -77,7 +77,7 @@ class StepContext:
 StepFn = Callable[[StepContext], StepReport]
 
 # Ordine canonico della catena `sbob run`
-PIPELINE = ("materiale", "download", "audio", "trascrivi", "appunti", "mappa")
+PIPELINE = ("materiale", "download", "audio", "trascrivi", "appunti", "mappa", "notebook")
 
 
 def get_step(name: str) -> StepFn:
@@ -93,6 +93,7 @@ def get_step(name: str) -> StepFn:
         "materiale": "sbob.steps.materiale",
         "mappa": "sbob.steps.mappa",
         "pdf": "sbob.steps.pdf",
+        "notebook": "sbob.steps.notebook",
     }
     if name not in modules:
         raise KeyError(f"Passo sconosciuto: {name}")

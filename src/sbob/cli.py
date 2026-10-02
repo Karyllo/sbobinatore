@@ -291,6 +291,16 @@ def webeep_corsi(as_json: JsonOpt = False):
     out.print(t)
 
 
+@webeep_app.command("scegli")
+def webeep_scegli(as_json: JsonOpt = False,
+                  id: Annotated[Optional[list[int]], typer.Option("--id", help="Da script: id WeBeep da aggiungere (ripetibile).")] = None,
+                  tutti_gli_anni: Annotated[bool, typer.Option("--tutti-gli-anni", help="Mostra anche i corsi degli anni passati.")] = False):
+    """Scegli con un elenco a spunte i corsi WeBeep da sincronizzare: crea quelli nuovi in sbob.toml (i tolti restano)."""
+    from sbob.scelta import run_scegli
+
+    _emit([run_scegli(_settings(), id or None, tutti_gli_anni, as_json)], as_json)
+
+
 @webeep_app.command("collega")
 def webeep_collega(corso: str, webeep_id: int):
     """Collega un corso di sbob a un corso WeBeep (scrive webeep_id in sbob.toml)."""
@@ -430,16 +440,23 @@ def pdf(path: Annotated[str, typer.Argument(help="File .pdf o cartella di PDF.")
 def run(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
         da: Annotated[str, typer.Option("--da", help="Primo passo.")] = PIPELINE[0],
         fino_a: Annotated[str, typer.Option("--fino-a", help="Ultimo passo.")] = PIPELINE[-1]):
-    """Esegue la catena materiale → download → audio → trascrivi → appunti → mappa. Si ferma se un passo richiede l'utente."""
+    """Esegue la catena materiale → download → audio → trascrivi → appunti → mappa → notebook. Si ferma se un passo richiede l'utente."""
     try:
         steps = PIPELINE[PIPELINE.index(da): PIPELINE.index(fino_a) + 1]
     except ValueError:
         err.print(f"[red]Passi validi: {', '.join(PIPELINE)}[/red]")
         raise typer.Exit(Exit.ERROR)
+    reports = _run_chain(corso, steps, archivio=archivio, force=force, dry_run=dry_run, as_json=as_json)
+    if as_json:
+        _emit(reports, True)
+    raise typer.Exit(int(max(r.exit_code for r in reports)))
+
+
+def _run_chain(corso: str, steps, *, archivio=None, force=False, dry_run=False, as_json=False) -> list[StepReport]:
     reports, pending = [], set()
     for step in steps:
         r = _run_step(step, corso, archivio=archivio, force=force, dry_run=dry_run, quiet=as_json)
-        if dry_run and pending:
+        if dry_run and pending and step != "notebook":     # il taccuino lavora per sorgente, non per lezione
             # in simulazione i passi precedenti non hanno prodotto file: aggiungo ciò che produrrebbero
             extra = pending - set(r.done) - set(r.skipped)
             if extra:
@@ -451,9 +468,37 @@ def run(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: 
             _print_report(r)
         if r.exit_code in (Exit.HUMAN, Exit.ERROR):
             break
+    return reports
+
+
+@app.command()
+def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False):
+    """Esegue la catena completa su tutti i corsi collegati a WeBeep (quelli scelti con `sbob webeep scegli`)."""
+    s = _settings()
+    slugs = [slug for slug, c in s.corsi.items() if c.webeep_id]
+    if not slugs:
+        _emit([StepReport(step="aggiorna", error="Nessun corso collegato a WeBeep: sbob webeep scegli")], as_json)
+        return
+    reports: list[StepReport] = []
+    for slug in slugs:
+        if not as_json:
+            err.print(f"[bold]── {slug}[/bold]")
+        rs = _run_chain(slug, PIPELINE, force=force, dry_run=dry_run, as_json=as_json)
+        reports += rs
+        if any(r.exit_code == Exit.HUMAN for r in rs):      # login scaduto & co: inutile insistere sugli altri corsi
+            break
     if as_json:
         _emit(reports, True)
     raise typer.Exit(int(max(r.exit_code for r in reports)))
+
+
+@app.command()
+def notebook(corso: str, azione: Annotated[Optional[str], typer.Argument(help="aggiungi-archivio | rimuovi-archivio (vuoto = aggiorna il taccuino)")] = None,
+             anno: Annotated[Optional[str], typer.Argument(help="Anno dell'edizione, es. 2024-25.")] = None,
+             force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False):
+    """Tiene aggiornato il taccuino NotebookLM del corso (appunti e materiale, una sorgente per cartella)."""
+    _emit([_run_step("notebook", corso, force=force, dry_run=dry_run, quiet=as_json,
+                     options={"azione": azione, "anno": anno, "esplicito": True})], as_json)
 
 
 # --------------------------------------------------------------------------- cookie

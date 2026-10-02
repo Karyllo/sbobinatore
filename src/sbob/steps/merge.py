@@ -2,7 +2,7 @@
 
 Modi (--modo):
   split     file da al massimo 500k parole (limite per sorgente di NotebookLM) → <slug>_<da>_1.md, _2.md, ...
-  monolite  un solo file con indice, marker [[ID_SESSIONE_n]] e box di metadati per ogni lezione
+  monolite  un solo file con indice e una sezione per documento (formato `compose`, deterministico)
   tde       come monolite ma per i temi d'esame (file con 'tde' nel nome), ordinati per data
 
 Sorgente (--da): appunti (solo *_appunti.md) · trascrizioni · materiale (materiale_md/, convertito da `sbob materiale`).
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 from sbob.core import frontmatter, naming
@@ -22,14 +22,14 @@ from sbob.core.report import StepReport
 from sbob.steps.base import StepContext
 
 WORD_LIMIT = 500_000
-TYPE_NAMES = {"lez": "🧠 Lezione Teorica", "ese": "✍️ Esercitazione Pratica",
-              "lab": "🧪 Laboratorio / Sperimentale", "sem": "🎤 Seminario / Extra", "tde": "💀 Tema d'esame"}
+TYPE_NAMES = {"lez": "lezione", "ese": "esercitazione", "lab": "laboratorio", "sem": "seminario", "tde": "tema d'esame"}
 SHORT_NAMES = {"lez": "Lezione", "ese": "Esercitazione", "lab": "Laboratorio", "sem": "Seminario", "tde": "Tema d'esame"}
+_PLURALS = {"lez": ("lezione", "lezioni"), "ese": ("esercitazione", "esercitazioni"), "lab": ("laboratorio", "laboratori"),
+            "sem": ("seminario", "seminari"), "tde": ("tema d'esame", "temi d'esame")}
 _HEADING = re.compile(r"^#{1,5}\s")
 _FENCE = re.compile(r"^\s*(```|~~~)")
 _DATE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 _DATE_IT = re.compile(r"(\d{2})-(\d{2})-(\d{4})")
-RULE = "━" * 60
 
 
 def downgrade_headers(content: str) -> str:
@@ -39,6 +39,28 @@ def downgrade_headers(content: str) -> str:
         if m := _FENCE.match(line):
             fence = None if fence == m.group(1) else (fence or m.group(1))
         out.append("#" + line if fence is None and _HEADING.match(line) else line)
+    return "\n".join(out)
+
+
+def nest_headers(content: str, top: int = 3) -> str:
+    """Sposta i titoli in modo che il più alto diventi di livello `top` (sotto la sezione `##` del documento),
+    senza toccare i blocchi di codice. Max livello 6."""
+    levels, fence = [], None
+    lines = content.split("\n")
+    for line in lines:
+        if m := _FENCE.match(line):
+            fence = None if fence == m.group(1) else (fence or m.group(1))
+        elif fence is None and (h := re.match(r"^(#{1,6})\s", line)):
+            levels.append(len(h.group(1)))
+    if not levels:
+        return content
+    shift, out, fence = top - min(levels), [], None
+    for line in lines:
+        if m := _FENCE.match(line):
+            fence = None if fence == m.group(1) else (fence or m.group(1))
+        elif fence is None and (h := re.match(r"^(#{1,6})(\s.*)$", line)):
+            line = "#" * min(6, max(1, len(h.group(1)) + shift)) + h.group(2)
+        out.append(line)
     return "\n".join(out)
 
 
@@ -62,6 +84,11 @@ def week_of(day: str | None, start: str | None) -> int | str:
     return 0 if delta < 0 else delta // 7 + 1      # 0 = prima dell'inizio del corso
 
 
+def it_date(day: str | None) -> str | None:
+    """2026-04-14 → 14/04/2026."""
+    return datetime.strptime(day, "%Y-%m-%d").strftime("%d/%m/%Y") if day else None
+
+
 @dataclass
 class Doc:
     path: Path
@@ -71,11 +98,35 @@ class Doc:
     day: str | None
 
     @property
-    def title(self) -> str:
+    def tipo(self) -> str | None:
         n = naming.parse(self.stem)
-        base = f"{SHORT_NAMES[n.tipo]} {n.num:02d}" if n else self.stem.replace("_", " ").title()
-        topics = self.meta.get("argomenti")
-        return f"{base} — {', '.join(topics[:4])}" if topics else base
+        if n:
+            return n.tipo
+        if self.meta.get("tipo") in TYPE_NAMES:
+            return self.meta["tipo"]
+        return "tde" if "tde" in self.stem.lower() else None
+
+    @property
+    def topic(self) -> str | None:
+        """Argomento dal frontmatter, altrimenti il primo titolo del documento."""
+        if t := self.meta.get("argomento"):
+            return str(t).strip()
+        if topics := self.meta.get("argomenti"):
+            return ", ".join(topics[:4])
+        for line in self.body.splitlines():
+            if _HEADING.match(line):
+                return line.lstrip("# ").strip()
+        return None
+
+    @property
+    def heading(self) -> str:
+        """`Lezione 01 · 14/04/2026 · Argomento`; per un tema d'esame `Esame del 20/01/2023`."""
+        n = naming.parse(self.stem)
+        when = it_date(self.day)
+        if self.tipo == "tde" and not n:
+            return f"Esame del {when}" if when else self.stem.replace("_", " ")
+        base = f"{SHORT_NAMES[n.tipo]} {n.num:02d}" if n else self.stem.replace("_", " ")
+        return " · ".join(x for x in (base, when, self.topic if n else None) if x)
 
 
 def load_docs(files: list[Path]) -> list[Doc]:
@@ -115,51 +166,46 @@ def build_split(docs: list[Doc], limit: int | None = None) -> list[str]:
     return parts
 
 
+def describe(docs: list[Doc]) -> str:
+    """`18 lezioni e 8 laboratori, dal 14/04/2026 al 04/06/2026.`"""
+    counts: dict[str, int] = {}
+    for d in docs:
+        counts[d.tipo or ""] = counts.get(d.tipo or "", 0) + 1
+    parts = [f"{n} {_PLURALS[t][n != 1]}" if t else f"{n} {'documento' if n == 1 else 'documenti'}"
+             for t, n in sorted(counts.items(), key=lambda kv: -kv[1])]
+    what = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " e " + parts[-1]
+    days = sorted(d.day for d in docs if d.day)
+    span = f", dal {it_date(days[0])} al {it_date(days[-1])}" if days else ""
+    return f"{what}{span}. Ogni sezione è un documento."
+
+
+def compose(title: str, intro: str, docs: list[Doc], edizione: str | None = None) -> str:
+    """Unico formato dei file uniti (merge e taccuino): titolo, indice, una sezione per documento.
+    Deterministico: stesso input → stessi byte (niente data di generazione), così l'hash decide se ricaricare.
+    Niente emoji, righe decorative, marcatori né istruzioni per l'AI: nelle sorgenti NotebookLM sarebbero contenuto."""
+    out = [f"# {title}", "", intro, "", "## Indice", ""]
+    out += [f"- {d.heading}" for d in docs]
+    for d in docs:
+        info = " · ".join(x for x in (f"Tipo: {TYPE_NAMES[d.tipo]}" if d.tipo else None,
+                                      f"Edizione {edizione}" if edizione else None, f"File: {d.path.name}") if x)
+        out += ["", f"## {d.heading}", info, "", nest_headers(d.body.strip())]
+    return "\n".join(out) + "\n"
+
+
+def course_title(ctx_course, what: str, teacher: str | None = None) -> str:
+    extra = f"{ctx_course.anno_accademico}" + (f", prof. {teacher}" if teacher else "")
+    return f"{ctx_course.nome} — {what} ({extra})"
+
+
 def build_monolite(docs: list[Doc], ctx: StepContext) -> str:
     c = ctx.course
-    header = [f"# 🎓 {c.nome} — archivio unificato ({c.anno_accademico})",
-              f"**Ultimo aggiornamento:** {date.today().strftime('%d/%m/%Y')}", "",
-              "> **ISTRUZIONI PER L'AI:**",
-              "> Questo documento contiene sessioni di diversi tipi:",
-              "> - **Lezione Teorica:** definizioni, teoremi e concetti fondamentali.",
-              "> - **Esercitazione:** applicazione pratica, risoluzione di problemi, trucchi di calcolo.",
-              "> - **Laboratorio:** esperimenti, software, analisi di dati reali.",
-              "> ", "> Quando rispondi, **specifica sempre** se l'informazione viene dalla teoria o dalla pratica.",
-              "", "---"]
-    toc, blocks = [], []
-    for i, d in enumerate(docs, 1):
-        n = naming.parse(d.stem)
-        tipo = TYPE_NAMES.get(n.tipo if n else "", "📝 Nota")
-        week = week_of(d.day, c.inizio_corso)
-        toc.append(f"{i}. **{c.nome}** - {d.title} ({tipo})")
-        blocks.append("\n".join([
-            "\n" + RULE, f"## {i}. [{c.nome}] {d.title}", f"[[ID_SESSIONE_{i}]]",
-            f"> 📚 **Materia:** {c.nome}", f"> 🏷️ **Tipo:** {tipo}",
-            f"> 📅 **Data:** {d.day or 'Data sconosciuta'} (Settimana {week})",
-            f"> 📂 **File:** `{d.path.name}`", RULE + "\n",
-            downgrade_headers(d.body.strip()), f"\n[[FINE_SESSIONE_{i}]]\n<br>\n"]))
-    return "\n".join([*header, "## 📑 INDICE GENERALE", "\n".join(toc), "\n---\n", *blocks]) + "\n"
+    return compose(course_title(c, "Appunti delle lezioni", c.docente), describe(docs), docs, c.anno_accademico)
 
 
 def build_tde(docs: list[Doc], ctx: StepContext) -> str:
-    header = [f"# 💀 {ctx.course.nome} — archivio temi d'esame (TDE)",
-              f"**Generato il:** {date.today().isoformat()}", "",
-              "### 🤖 ISTRUZIONI PER L'INTELLIGENZA ARTIFICIALE",
-              "> Questo documento contiene la raccolta storica degli esami, divisi per data.",
-              "> Cerca pattern ricorrenti negli esercizi tra le varie date.", "", "---"]
-    toc, blocks, seen = [], [], {}
-    for i, d in enumerate(docs, 1):
-        day = d.day or "Data sconosciuta"
-        key = day.replace("-", "_").replace(" ", "_")
-        seen[key] = seen.get(key, 0) + 1
-        ident = key if seen[key] == 1 else f"{key}_{seen[key]}"     # due esami nella stessa data → id distinti
-        title = d.stem.replace("_", " ").replace("-", " ").title()
-        toc.append(f"{i}. **{day}** - {title}")
-        blocks.append("\n".join([
-            "\n" + "━" * 50, f"## 🎓 {i}. ESAME DEL {day}", f"[[ID_TDE_{ident}]]", f"> 📅 **Data:** {day}",
-            f"> 📂 **File:** `{d.path.name}`", "━" * 50 + "\n", downgrade_headers(d.body.strip()),
-            f"\n[[FINE_TDE_{ident}]]\n<br>\n"]))
-    return "\n".join([*header, "## 🗂️ INDICE CRONOLOGICO", "\n".join(toc), "\n---\n", *blocks]) + "\n"
+    c = ctx.course
+    return compose(course_title(c, "Temi d'esame", c.docente),
+                   f"{len(docs)} temi d'esame, dal più vecchio al più recente.", docs, c.anno_accademico)
 
 
 def run(ctx: StepContext) -> StepReport:
