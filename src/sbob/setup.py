@@ -9,6 +9,7 @@ import json
 import os
 import re
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 from sbob.config import CONFIG_HOME, SOURCE_TYPES
@@ -52,7 +53,7 @@ def render_course(slug: str, nome: str, anno: str, cartella: str, sorgente: dict
     return "\n".join(lines) + "\n"
 
 
-def render_config(root: str, lingua: str, preset: str, courses: list[str] = ()) -> str:
+def render_config(root: str, lingua: str, preset: str, courses: Sequence[str] = ()) -> str:
     p = PRESETS[preset]
     parts = [
         "# Creato da `sbob init`. Documentazione delle opzioni: sbob.example.toml nel repo.",
@@ -165,7 +166,7 @@ def init(force: bool = False) -> int:
         val = questionary.password(f"Chiave {prov} ({KEY_PREFIX[prov]}):").ask()
         if val:
             keys[f"{KEY_PREFIX[prov]}_ACCOUNT1"] = val.strip()
-    courses = []
+    courses: list[str] = []
     while questionary.confirm("Vuoi aggiungere un corso adesso?", default=not courses).ask():
         if c := _ask_course(questionary, Path(root).expanduser()):
             courses.append(c)

@@ -20,7 +20,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 
 from sbob.config import Course, Settings
 from sbob.core import naming
@@ -208,7 +208,7 @@ def plan_source(ctx: StepContext, src: dict, idx: int) -> dict[str, dict]:
         _check_output(_run_prd(ctx.settings, plan_args, lay.state), src.get("tipo"))
     plan = read_plan(plan_dir)
     for info in plan.values():                   # metadati del file di link (archivio): prevalgono
-        extra = link_meta.get(info["id"].lower(), {})
+        extra = link_meta.get(str(info["id"]).lower(), {})
         info["tipo"] = extra.get("tipo") or info["tipo"]
         info["argomento"] = extra.get("argomento") or info["argomento"]
         info["data"] = extra.get("data")
@@ -244,7 +244,7 @@ def assign_names(course: Course, existing_stems: list[str], new: dict[str, str],
     out: dict[str, str] = {}
     for tipo in sorted(set(new.values())):
         keys = [k for k, t in new.items() if t == tipo]
-        dated = sorted(((dates or {}).get(k) or naming.parse_prd(k), k) for k in keys)
+        dated = sorted(((dates or {}).get(k) or naming.parse_prd(k) or datetime.min, k) for k in keys)
         names = naming.next_numbers(parsed, [d.date() for d, _ in dated], course.slug, tipo)
         out.update({k: n.stem for (_, k), n in zip(dated, names)})
     return out
@@ -285,7 +285,7 @@ def run(ctx: StepContext) -> StepReport:
                 continue                                 # già trovata in un'altra fonte
             plan[key] = info
             seen_ids.add(info["id"].lower())
-    if problems and not plan:
+    if problems and not plan and first_error:
         raise first_error                                # nessuna fonte ha funzionato: errore vero
     rep.warnings += [f"{p} (le altre fonti sono state lette)" for p in problems]
     if not plan:
@@ -321,12 +321,12 @@ def run(ctx: StepContext) -> StepReport:
     lay.ensure("video")
     got = {p.stem: p for p in dl_dir.rglob("*.mp4")}
     for key, stem in names.items():
-        src = got.get(key)
-        if not src:
+        mp4 = got.get(key)
+        if not mp4:
             rep.fail(stem, f"file {key}.mp4 non scaricato")
             continue
         dst = lay.video / f"{stem}.mp4"
-        shutil.move(str(src), dst)
+        shutil.move(str(mp4), dst)
         manifest.videos[key] = stem
         if plan[key].get("argomento"):
             manifest.meta(stem)["argomento"] = plan[key]["argomento"]

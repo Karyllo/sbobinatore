@@ -168,11 +168,12 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
                           item=f"{pdf.stem}#p{first + 1}-{last + 1}", system=system,
                           validate=lambda t: None if t.strip() else "risposta vuota")
         if r.ok:
-            atomic_write_text(ckpt / _ckpt_name(first, last), r.text.strip() + "\n")
+            atomic_write_text(ckpt / _ckpt_name(first, last), (r.text or "").strip() + "\n")
             return None
         return r.error_kind, r.error or "errore"
 
     def text_block(first: int, last: int) -> None:
+        assert text_role is not None
         text_done = _ckpt_map(ckpt, text=True)
         pages = [n for n in range(first, last + 1) if n not in text_done]
         for a, b in _blocks(pages, pages_per_block):
@@ -180,7 +181,7 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
                                    system=prompts.load(lingua, "pdf_testo"),
                                    validate=lambda t: None if t.strip() else "risposta vuota")
             if r.ok:
-                atomic_write_text(ckpt / _ckpt_name(a, b, text=True), r.text.strip() + "\n")
+                atomic_write_text(ckpt / _ckpt_name(a, b, text=True), (r.text or "").strip() + "\n")
             else:
                 for n in range(a, b + 1):
                     res.failed[n + 1] = r.error or "errore"
@@ -229,9 +230,9 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
     res.degraded = sorted(n + 1 for n in range(res.pages) if n not in visual)   # pagine solo-testo (1-based)
     files: list[Path] = []
     for n in range(res.pages):
-        f = visual.get(n) or text[n]
-        if not files or files[-1] != f:
-            files.append(f)
+        part = visual.get(n) or text[n]
+        if not files or files[-1] != part:
+            files.append(part)
     body = "\n\n".join(f.read_text(encoding="utf-8").strip() for f in files) + "\n"
     conversione = "visione" if not res.degraded else ("testo" if len(res.degraded) == res.pages else "misto")
     atomic_write_text(out, frontmatter.join({**(meta or {}), "conversione": conversione}, body))

@@ -49,7 +49,8 @@ def _files(course: Course, source: str) -> list[Path]:
 
 def _paragraphs(body: str):
     """(paragrafo, titolo di sezione corrente, ultimo timestamp visto)."""
-    heading, stamp, buf = None, None, []
+    heading, stamp = None, None
+    buf: list[str] = []
     for line in body.split("\n") + [""]:
         if m := _HEADING.match(line):
             if buf:

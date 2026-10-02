@@ -34,7 +34,7 @@ class Manifest:
         return self.data["videos"]
 
     @property
-    def materiale(self) -> dict[str, str]:
+    def materiale(self) -> dict[str, dict]:
         return self.data["materiale"]
 
     @property

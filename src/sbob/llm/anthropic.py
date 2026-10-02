@@ -21,7 +21,7 @@ class AnthropicProvider:
 
     @staticmethod
     def _content(m: Message) -> list[dict]:
-        out = []
+        out: list[dict] = []
         for p in m.parts:
             if isinstance(p, TextPart):
                 out.append({"type": "text", "text": p.text})

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
+from pathlib import Path
+from typing import cast
 
 from sbob.config import ConfigError, Settings
 from sbob.core import archivio as ar
@@ -59,7 +61,7 @@ def _docenti(settings: Settings, course, rep: StepReport, as_json: bool) -> Step
                                 choices=[questionary.Choice(f"{t['docente']} ({', '.join(sorted(set(t['anni'])))})",
                                                             value=t["docente"]) for t in teachers]).ask()
     if chosen:
-        set_course_field(settings.path, course.slug, "archivio_docente", chosen)
+        set_course_field(cast(Path, settings.path), course.slug, "archivio_docente", chosen)
         rep.done.append(f"docente scelto: {chosen}")
         rep.notes.append(f"Ora: sbob archivio {course.slug} aggiungi")
     return rep
@@ -108,7 +110,7 @@ def _aggiungi(settings: Settings, course, rep: StepReport, anno: str | None, doc
                 added[y] = found[0]["id"]
 
     if added:
-        set_course_field(settings.path, course.slug, "archivio", {**course.archivio, **added})
+        set_course_field(cast(Path, settings.path), course.slug, "archivio", {**course.archivio, **added})
         rep.done = [f"{y} → WeBeep {i}" for y, i in sorted(added.items(), reverse=True)]
         rep.notes.append(f"Ora: sbob materiale {course.slug} --archivio <anno>  ·  sbob run {course.slug} --archivio <anno>")
     if problems and not added:

@@ -123,7 +123,7 @@ def sync(ctx: StepContext, rep: StepReport, nb_id: str, wanted: dict[str, str], 
         except RuntimeError as e:
             rep.fail(title, str(e))
             continue
-        if replace:
+        if replace and old:
             try:
                 nlm.delete_source(nb_id, old["id"])
             except RuntimeError as e:

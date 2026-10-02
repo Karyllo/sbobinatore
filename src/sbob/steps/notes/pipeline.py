@@ -90,7 +90,7 @@ def refine_chunk(role: Role, i: int, chunks: list[str], lingua: str, item: str, 
     if (hit := cache.get("refined", i, role.model, prompt)) is not None:
         return hit
     res = role.complete([Message.user(prompt)], item=f"{item}#{i + 1}")
-    if not res.ok or len(res.text.split()) < MIN_REFINED_RATIO * len(chunks[i].split()):
+    if not res.ok or not res.text or len(res.text.split()) < MIN_REFINED_RATIO * len(chunks[i].split()):
         return chunks[i]                          # fallback sicuro: il testo originale (non in cache: si ritenta)
     cache.put("refined", i, role.model, prompt, res.text)
     return res.text
@@ -99,13 +99,13 @@ def refine_chunk(role: Role, i: int, chunks: list[str], lingua: str, item: str, 
 def notes_chunk(role: Role, i: int, chunk: str, total: int, lingua: str, item: str,
                 cache: ChunkCache = NO_CACHE) -> tuple[str, str | None]:
     """(testo, errore). In caso di errore il testo è il banner da inserire."""
-    prompt = prompts.render(lingua, "notes", variante=role.provider_name, chunk_text=chunk, part_number=i + 1,
-                            total_parts=total)
+    prompt = prompts.render(lingua, "notes", variante=role.provider_name, chunk_text=chunk, part_number=str(i + 1),
+                            total_parts=str(total))
     prompt += "\n\n" + prompts.load(lingua, "notes_extra", role.provider_name).strip()
     if (hit := cache.get("notes", i, role.model, prompt)) is not None:
         return hit, None
     res = role.complete([Message.user(prompt)], item=f"{item}#{i + 1}", validate=notes_validator(chunk))
-    if res.ok:
+    if res.ok and res.text:
         cache.put("notes", i, role.model, prompt, res.text)
         return res.text, None
     return f"⚠️ ERRORE (blocco {i + 1}/{total}): {res.error}", res.error or "errore"

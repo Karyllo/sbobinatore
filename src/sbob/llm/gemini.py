@@ -30,7 +30,7 @@ class GeminiProvider:
                                                                     display_name=part.path.name))
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            state = self.client.files.get(name=up.name).state
+            state = self.client.files.get(name=up.name or "").state
             if state == types.FileState.ACTIVE:
                 return up
             if state == types.FileState.FAILED:
@@ -63,7 +63,7 @@ class GeminiProvider:
         uploaded: list = []
         try:
             cfg: dict[str, Any] = {
-                "safety_settings": [types.SafetySetting(category=c, threshold=self.safety)
+                "safety_settings": [types.SafetySetting(category=c, threshold=self.safety)  # type: ignore[arg-type]
                                     for c in _SAFETY_CATEGORIES],
                 "http_options": types.HttpOptions(timeout=int(params.timeout * 1000)),
                 "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
@@ -77,7 +77,7 @@ class GeminiProvider:
             if params.system:
                 cfg["system_instruction"] = params.system
             if params.thinking:
-                cfg["thinking_config"] = types.ThinkingConfig(include_thoughts=False, thinking_level="HIGH")
+                cfg["thinking_config"] = types.ThinkingConfig(include_thoughts=False, thinking_level="HIGH")  # type: ignore[arg-type]
 
             resp = self.client.models.generate_content(
                 model=model, contents=self._contents(messages, uploaded),

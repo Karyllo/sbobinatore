@@ -25,9 +25,7 @@ jobs:
       - run: uv run pytest -q
 
   tipi:
-    # mypy è informativo finché gli errori noti non sono sistemati: non blocca le modifiche
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

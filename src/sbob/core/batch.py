@@ -35,7 +35,8 @@ def list_tree(folder: Path, extensions: Iterable[str]) -> list[Path]:
 def plan_jobs(inputs: Iterable[Path], dst_for: Callable[[Path], Path], force: bool = False,
               only: set[str] | None = None) -> tuple[list[Job], list[Job]]:
     """Divide in (da_fare, già_fatti). `only` limita agli stem indicati."""
-    todo, done = [], []
+    todo: list[Job] = []
+    done: list[Job] = []
     for src in inputs:
         if only and src.stem not in only:
             continue

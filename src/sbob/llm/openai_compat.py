@@ -27,9 +27,10 @@ class OpenAICompatProvider:
 
     @staticmethod
     def _content(m: Message):
-        if all(isinstance(p, TextPart) for p in m.parts):
-            return "\n".join(p.text for p in m.parts)
-        out = []
+        texts = [p.text for p in m.parts if isinstance(p, TextPart)]
+        if len(texts) == len(m.parts):
+            return "\n".join(texts)
+        out: list[dict] = []
         for p in m.parts:
             if isinstance(p, TextPart):
                 out.append({"type": "text", "text": p.text})

@@ -40,10 +40,10 @@ def transcribe_file(audio, modello: str, lingua: str) -> str:
         buf.append(t)
         size += len(t) + 1
         if size >= 500:
-            out.append(f"{format_ts(start)} {collapse_repetitions(' '.join(buf))}")
+            out.append(f"{format_ts(start or 0)} {collapse_repetitions(' '.join(buf))}")
             buf, size, start = [], 0, None
     if buf:
-        out.append(f"{format_ts(start)} {collapse_repetitions(' '.join(buf))}")
+        out.append(f"{format_ts(start or 0)} {collapse_repetitions(' '.join(buf))}")
     return "\n\n".join(out)
 
 

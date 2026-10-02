@@ -26,6 +26,7 @@ from __future__ import annotations
 import itertools
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, fields
 from threading import Lock
 from typing import Any
@@ -83,7 +84,7 @@ class Role:
                        for k in keys]
         self._rr = itertools.cycle(range(len(self._slots)))
         self._lock = Lock()
-        self.fallback_factory = None         # impostato dal Registry se il ruolo ha una `riserva`
+        self.fallback_factory: Callable[[], Role] | None = None         # impostato dal Registry se il ruolo ha una `riserva`
         self._fallback: Role | None = None
         self.used_fallback: str | None = None  # label della riserva, se è servita
 

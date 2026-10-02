@@ -152,7 +152,9 @@ def source_files(ctx: StepContext, da: str) -> tuple[list[Path], str]:
 
 def build_split(docs: list[Doc], limit: int | None = None) -> list[str]:
     limit = limit or WORD_LIMIT     # letto a runtime
-    parts, cur, words = [], [], 0
+    parts: list[str] = []
+    cur: list[str] = []
+    words = 0
     for d in docs:
         block = f"# {d.stem}\n\n{d.body.strip()}\n\n"
         w = word_count(block)

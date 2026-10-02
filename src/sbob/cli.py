@@ -127,7 +127,7 @@ def corsi(as_json: JsonOpt = False):
     s = _settings()
     rows = [{"slug": c.slug, "nome": c.nome, "anno": c.anno_accademico, "cartella": str(c.cartella),
              "esiste": c.cartella.exists(), "trascrizione": c.trascrizione,
-             "sorgente": ", ".join(s["tipo"] for s in c.sorgenti) or None} for c in s.corsi.values()]
+             "sorgente": ", ".join(x["tipo"] for x in c.sorgenti) or None} for c in s.corsi.values()]
     if as_json:
         sys.stdout.write(json.dumps({"config": str(s.path) if s.path else None, "root": str(s.root),
                                      "corsi": rows}, ensure_ascii=False, indent=2) + "\n")
@@ -136,8 +136,8 @@ def corsi(as_json: JsonOpt = False):
         err.print("[yellow]Nessun sbob.toml trovato[/yellow] (cerca: $SBOB_CONFIG, ./sbob.toml, ~/.config/sbob/sbob.toml)")
     t = Table("slug", "nome", "anno", "trascrizione", "cartella")
     for r in rows:
-        t.add_row(r["slug"], r["nome"], r["anno"], r["trascrizione"],
-                  r["cartella"] if r["esiste"] else f"[red]{r['cartella']} (manca)[/red]")
+        t.add_row(str(r["slug"]), str(r["nome"]), str(r["anno"]), str(r["trascrizione"]),
+                  str(r["cartella"]) if r["esiste"] else f"[red]{r['cartella']} (manca)[/red]")
     out.print(t)
 
 
@@ -309,6 +309,8 @@ def webeep_collega(corso: str, webeep_id: int):
     s = _settings()
     try:
         s.corso(corso)
+        if s.path is None:
+            raise ValueError("sbob.toml non trovato")
         set_course_field(s.path, corso, "webeep_id", webeep_id)
     except (ConfigError, ValueError) as e:
         err.print(f"[red]{e}[/red]")
@@ -453,7 +455,8 @@ def run(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: 
 
 
 def _run_chain(corso: str, steps, *, archivio=None, force=False, dry_run=False, as_json=False) -> list[StepReport]:
-    reports, pending = [], set()
+    reports: list[StepReport] = []
+    pending: set[str] = set()
     for step in steps:
         r = _run_step(step, corso, archivio=archivio, force=force, dry_run=dry_run, quiet=as_json)
         if dry_run and pending and step != "notebook":     # il taccuino lavora per sorgente, non per lezione

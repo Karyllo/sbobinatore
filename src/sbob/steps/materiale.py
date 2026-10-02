@@ -108,7 +108,7 @@ def sync(ctx: StepContext, rep: StepReport) -> None:
 
     course, lay, manifest = ctx.course, ctx.layout, ctx.manifest()
     client = WebeepClient(load_token() or "")
-    files = client.files(course.webeep_id)
+    files = client.files(course.webeep_id or 0)
     todo = []
     for f in files:
         dst = lay.materiale / f.relpath
@@ -304,8 +304,9 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
                     with tempfile.TemporaryDirectory() as t:
                         pdf = src
                         if ext in OFFICE_EXT:
-                            pdf = _office_to_pdf(src, Path(t))
-                            if pdf is None:                                  # niente LibreOffice: solo testo
+                            converted = _office_to_pdf(src, Path(t))
+                            pdf = converted if converted is not None else src
+                            if converted is None:                                  # niente LibreOffice: solo testo
                                 text = _office_to_text(src)
                                 if text is None:
                                     rep.fail(rel, "serve LibreOffice (`brew install --cask libreoffice`) o "
