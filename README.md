@@ -102,6 +102,17 @@ sbob materiale <corso>                  # scarica il nuovo e converte
 - Anche i siti personali dei docenti: `materiale_siti = ["https://…"]` nel corso.
 - Per le registrazioni un corso può avere più fonti insieme: `sorgenti = [ { tipo = "webeep", url = "…" }, { tipo = "webpage-url", url = "https://sito-del-docente" } ]`. sbob le legge tutte, unisce i duplicati e, se una non funziona, usa le altre.
 
+### Anni precedenti (stesso corso, stesso docente)
+Le edizioni passate stanno dentro il corso, in `<corso>/archivio/<anno>/`, con le stesse sottocartelle e uno stato separato:
+```bash
+sbob archivio <corso> aggiungi            # trova da WeBeep le edizioni con lo stesso codice e lo stesso docente
+sbob archivio <corso> aggiungi 2024-25    # una sola
+sbob archivio <corso> docenti             # se il docente è cambiato: scegli quale seguire
+sbob archivio <corso> elenco
+sbob run <corso> --archivio 2024-25       # qualsiasi passo accetta --archivio
+```
+Se per un anno non c'è lo stesso docente, sbob non aggiunge niente e ti avvisa (puoi scegliere il docente o forzare con `--id`). La mappa del corso ha una sezione per ogni edizione e collega i concetti tra gli anni; la ricerca guarda l'anno in corso e, se non trova niente (o con `--archivi`), anche gli anni passati.
+
 ### Struttura di un corso
 ```
 <corso>/
@@ -109,7 +120,8 @@ sbob materiale <corso>                  # scarica il nuovo e converte
   materiale_md/   ← gli stessi convertiti in Markdown
   video/  audio/  trascrizioni/  appunti/  merge/
   mappa/          ← riassunti, concetti e indice, per la navigazione
-  .sbob/          ← stato interno (cache, costi): non toccare
+  archivio/<anno>/  ← edizioni passate, stessa struttura
+  .sbob/          ← stato interno (log, cache, costi): non toccare
 ```
 I nomi dei file seguono la regola `AAAA-MM-GG_<corso>_<tipo>NN`, per esempio `2026-05-19_edp_lez13`.
 

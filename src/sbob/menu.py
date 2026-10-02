@@ -66,6 +66,18 @@ def menu() -> int:
     course, status = settings.corsi[slug], statuses[slug]
     console.print(f"[bold]{course.nome}[/bold]: {summary(status)}")
 
+    edition = None
+    if course.archivio:                                  # "lavora sull'archivio dell'anno precedente"
+        from sbob.core.archivio import archive_course
+
+        choice = questionary.select("Su quale edizione?", choices=[
+            questionary.Choice(f"Anno in corso ({course.anno_accademico})", value=None),
+            *[questionary.Choice(f"Archivio {y}", value=y) for y in sorted(course.archivio, reverse=True)]]).ask()
+        if choice:
+            edition = choice
+            course = archive_course(course, choice)
+            status = course_status(course)
+            console.print(f"[bold]Archivio {choice}[/bold]: {summary(status)}")
     suggested = suggest_steps(status, course)
     steps = questionary.checkbox(
         "Cosa vuoi fare?",
@@ -85,11 +97,11 @@ def menu() -> int:
     code = Exit.OK
     for step in steps:
         if step == "appunti" and mode == "run":      # le chiamate LLM costano: mostra la stima e chiedi conferma
-            est = _run_step(step, slug, dry_run=True)
+            est = _run_step(step, slug, dry_run=True, archivio=edition)
             _print_report(est)
             if est.done and not questionary.confirm("Procedo con la generazione degli appunti?", default=True).ask():
                 continue
-        rep = _run_step(step, slug, dry_run=(mode == "dry"))
+        rep = _run_step(step, slug, dry_run=(mode == "dry"), archivio=edition)
         _print_report(rep)
         code = max(code, rep.exit_code)
         if rep.exit_code in (Exit.HUMAN, Exit.ERROR):

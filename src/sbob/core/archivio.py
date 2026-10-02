@@ -61,7 +61,8 @@ def candidates(course: Course, webeep_courses: list[dict[str, Any]]) -> dict[str
     others: dict[str, list[dict]] = {}
     for c in webeep_courses:
         c_code, c_teacher = parse_fullname(c["nome"])
-        if c_code != code or not c["anno"] or c["id"] == course.webeep_id or c["anno"] == course.anno_accademico:
+        # solo anni PRECEDENTI (le sigle "AAAA-AA" si ordinano come stringhe)
+        if c_code != code or not c["anno"] or c["id"] == course.webeep_id or c["anno"] >= course.anno_accademico:
             continue
         info = {**c, "docente": c_teacher}
         (found if same_teacher(c_teacher, teacher) else others).setdefault(c["anno"], []).append(info)

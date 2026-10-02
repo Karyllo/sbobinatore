@@ -21,6 +21,7 @@ from typing import Any
 
 from sbob.config import Course, Settings
 from sbob.core import frontmatter, naming
+from sbob.core.archivio import archives_of
 from sbob.core.batch import atomic_write_text, list_inputs, list_tree
 from sbob.core.layout import Layout
 
@@ -68,6 +69,7 @@ def _lessons(course: Course) -> list[dict[str, Any]]:
         src = notes if notes.exists() else tr
         argomento = frontmatter.read(src)[0].get("argomento") if src.exists() else None
         out.append({
+            "edizione": course.anno_accademico,
             "lezione": stem, "titolo": lesson_title(stem) + (f" — {argomento}" if argomento else ""),
             "argomento": argomento,
             "data": n.data.isoformat() if n else None, "tipo": n.tipo if n else None, "numero": n.num if n else None,
@@ -88,8 +90,10 @@ def _concept_map(lessons: list[dict[str, Any]]) -> dict[str, dict[str, list[dict
     return concepts
 
 
-def _lesson_link(l: dict, start: Path) -> str:
+def _lesson_link(l: dict, start: Path, current: str | None = None) -> str:
     label = f"{l['titolo']} · {l['data']}" if l["data"] else l["titolo"]
+    if current and l.get("edizione") and l["edizione"] != current:       # lezione di un'edizione passata: si vede
+        label += f" · edizione {l['edizione']}"
     target = l["appunti"] or l["trascrizione"]
     return link(label, Path(target), start) if target else label
 
@@ -108,49 +112,70 @@ def _materiale(course: Course) -> list[dict[str, Any]]:
     return out
 
 
-def render_course(course: Course) -> dict[str, Any]:
+def _lesson_lines(l: dict, mappa: Path, cdir: Path, level: str, current: str) -> list[str]:
+    lines = [f"{level} {_lesson_link(l, mappa, current)}"]
+    if l["riassunto"]:
+        lines += ["", l["riassunto"]]
+    if l["concetti"]:
+        names = [link(c["nome"], cdir / concept_file(c["nome"]), mappa) +
+                 (" *(nuovo)*" if c.get("ruolo") == "introdotto" else "") for c in l["concetti"]]
+        lines += ["", "**Concetti:** " + ", ".join(names)]
+    if l["prerequisiti"]:
+        lines += ["", "**Prerequisiti:** " + ", ".join(l["prerequisiti"])]
+    files = [link(k, Path(l[k]), mappa) for k in ("appunti", "trascrizione") if l[k]]
+    if files:
+        lines += ["", "File: " + " · ".join(files)]
+    return lines + [""]
+
+
+def _materiale_lines(course: Course, materiale: list[dict], mappa: Path, level: str) -> list[str]:
+    if not materiale:
+        return []
+    solo_testo = sum(1 for m in materiale if m["conversione"] in ("testo", "misto"))
+    lines = [f"{level} Materiale", "", f"{len(materiale)} file convertiti in Markdown"
+             + (f" · {solo_testo} in modalità solo testo (figure non trascritte: si rifanno con `sbob materiale {course.slug}`)"
+                if solo_testo else ""), ""]
+    by_section: dict[str, list[dict]] = {}
+    for m in materiale:
+        by_section.setdefault(m["sezione"] or "Generale", []).append(m)
+    for sez in sorted(by_section):
+        lines.append(f"{level}# {sez}")
+        for m in by_section[sez]:
+            orig = f" · {link('originale', Path(m['originale']), mappa)}" if m["originale"] else ""
+            flag = " *(solo testo)*" if m["conversione"] in ("testo", "misto") else ""
+            lines.append(f"- {link(m['nome'], Path(m['file']), mappa)} — {m['tipo']}{flag}{orig}")
+        lines.append("")
+    return lines
+
+
+def render_course(course: Course, archives: list[Course] | tuple = ()) -> dict[str, Any]:
+    """Mappa del corso. `archives`: edizioni passate (stesso docente) incluse come sezioni e nei concetti incrociati."""
     lay = Layout.of(course)
     mappa, cdir = lay.mappa, lay.mappa / "concetti"
     lessons = _lessons(course)
-    concepts = _concept_map(lessons)
+    editions = [(a, _lessons(a), _materiale(a)) for a in archives if a.cartella.exists()]
+    concepts = _concept_map(lessons + [l for _, ls, _ in editions for l in ls])
+    year = course.anno_accademico
 
-    lines = [f"# Mappa — {course.nome} ({course.anno_accademico})", "",
+    lines = [f"# Mappa — {course.nome} ({year})", "",
              "> Mappa per la navigazione (generata da `sbob indice`, non modificare a mano).",
              "> Per un agente: leggi prima questo file, poi apri solo gli appunti pertinenti.", ""]
     missing = [l for l in lessons if l["riassunto"] is None]
     lines.append(f"**{len(lessons)} lezioni** · {len(concepts)} concetti" +
-                 (f" · {len(missing)} senza scheda (lancia `sbob mappa {course.slug}`)" if missing else ""))
+                 (f" · {len(missing)} senza scheda (lancia `sbob mappa {course.slug}`)" if missing else "") +
+                 (f" · edizioni passate: {', '.join(a.anno_accademico for a, _, _ in editions)}" if editions else ""))
     lines.append("")
     for l in lessons:
-        lines.append(f"## {_lesson_link(l, mappa)}")
-        if l["riassunto"]:
-            lines += ["", l["riassunto"]]
-        if l["concetti"]:
-            names = [link(c["nome"], cdir / concept_file(c["nome"]), mappa) +
-                     (" *(nuovo)*" if c.get("ruolo") == "introdotto" else "") for c in l["concetti"]]
-            lines += ["", "**Concetti:** " + ", ".join(names)]
-        if l["prerequisiti"]:
-            lines += ["", "**Prerequisiti:** " + ", ".join(l["prerequisiti"])]
-        files = [link(k, Path(l[k]), mappa) for k in ("appunti", "trascrizione") if l[k]]
-        if files:
-            lines += ["", "File: " + " · ".join(files)]
-        lines.append("")
+        lines += _lesson_lines(l, mappa, cdir, "##", year)
     materiale = _materiale(course)
-    if materiale:
-        solo_testo = sum(1 for m in materiale if m["conversione"] in ("testo", "misto"))
-        lines += ["## Materiale", "", f"{len(materiale)} file convertiti in Markdown"
-                  + (f" · {solo_testo} in modalità solo testo (figure non trascritte: si rifanno con `sbob materiale {course.slug}`)"
-                     if solo_testo else ""), ""]
-        by_section: dict[str, list[dict]] = {}
-        for m in materiale:
-            by_section.setdefault(m["sezione"] or "Generale", []).append(m)
-        for sez in sorted(by_section):
-            lines.append(f"### {sez}")
-            for m in by_section[sez]:
-                orig = f" · {link('originale', Path(m['originale']), mappa)}" if m["originale"] else ""
-                flag = " *(solo testo)*" if m["conversione"] in ("testo", "misto") else ""
-                lines.append(f"- {link(m['nome'], Path(m['file']), mappa)} — {m['tipo']}{flag}{orig}")
-            lines.append("")
+    lines += _materiale_lines(course, materiale, mappa, "##")
+    for a, a_lessons, a_materiale in editions:
+        lines += [f"## Edizione {a.anno_accademico} (anno precedente, stesso docente)", "",
+                  f"{len(a_lessons)} lezioni · {len(a_materiale)} file di materiale. Utile per confrontare come lo stesso "
+                  f"argomento è stato spiegato: i concetti sono collegati tra le edizioni.", ""]
+        for l in a_lessons:
+            lines += _lesson_lines(l, mappa, cdir, "###", year)
+        lines += _materiale_lines(a, a_materiale, mappa, "###")
     if concepts:
         lines += ["## Concetti del corso", ""]
         for name in sorted(concepts, key=str.casefold):
@@ -167,18 +192,20 @@ def render_course(course: Course) -> dict[str, Any]:
         for key, title in (("introdotto", "Introdotto in"), ("ripreso", "Ripreso in"),
                            ("prerequisito_per", "Prerequisito per")):
             if c[key]:
-                body += [f"## {title}", ""] + [f"- {_lesson_link(l, cdir)}" for l in c[key]] + [""]
+                body += [f"## {title}", ""] + [f"- {_lesson_link(l, cdir, year)}" for l in c[key]] + [""]
         atomic_write_text(cdir / concept_file(name), "\n".join(body).rstrip() + "\n")
 
-    return {"slug": course.slug, "nome": course.nome, "anno": course.anno_accademico,
+    return {"slug": course.slug, "nome": course.nome, "anno": year,
             "cartella": str(course.cartella), "indice": str(mappa / "INDICE.md"), "lezioni": lessons,
             "materiale": materiale,
+            "edizioni": [{"anno": a.anno_accademico, "cartella": str(a.cartella), "lezioni": ls, "materiale": ms}
+                         for a, ls, ms in editions],
             "concetti": sorted(concepts, key=str.casefold)}
 
 
 def render_all(settings: Settings, only: list[str] | None = None) -> dict[str, Any]:
     courses = [c for s, c in settings.corsi.items() if not only or s in only]
-    rendered = [render_course(c) for c in courses if c.cartella.exists()]
+    rendered = [render_course(c, archives_of(c)) for c in courses if c.cartella.exists()]
     root = settings.root / "mappa"
     shared: dict[str, list[str]] = {}
     for r in rendered:
@@ -190,7 +217,8 @@ def render_all(settings: Settings, only: list[str] | None = None) -> dict[str, A
     for r in rendered:
         n_sum = sum(1 for l in r["lezioni"] if l["riassunto"])
         lines.append(f"- {link(r['nome'], Path(r['indice']), root)} ({r['anno']}) — "
-                     f"{len(r['lezioni'])} lezioni, {n_sum} con scheda, {len(r['concetti'])} concetti")
+                     f"{len(r['lezioni'])} lezioni, {n_sum} con scheda, {len(r['concetti'])} concetti"
+                     + (f" · edizioni passate: {', '.join(e['anno'] for e in r['edizioni'])}" if r["edizioni"] else ""))
     cross = {k: v for k, v in shared.items() if len(v) > 1}
     if cross:
         lines += ["", "## Concetti condivisi tra corsi", ""]

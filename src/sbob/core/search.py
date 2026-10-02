@@ -74,20 +74,47 @@ def _score(text: str, terms: list[str]) -> int:
     return sum(norm.count(t) for t in terms)
 
 
+def _units(settings: Settings, corsi: list[str] | None, with_archives: bool):
+    from sbob.core.archivio import archives_of
+
+    for slug, course in settings.corsi.items():
+        if corsi and slug not in corsi:
+            continue
+        yield course
+        if with_archives:
+            yield from (a for a in archives_of(course) if a.cartella.exists())
+
+
 def search(settings: Settings, query: str, corsi: list[str] | None = None,
-           dove: tuple[str, ...] = SOURCES, limit: int = 20, snippet_chars: int = 400) -> dict[str, Any]:
+           dove: tuple[str, ...] = SOURCES, limit: int = 20, snippet_chars: int = 400,
+           archivi: str = "auto") -> dict[str, Any]:
+    """`archivi`: "auto" = solo l'anno in corso, e se non trova niente anche le edizioni passate (lo dichiara);
+    "si" = sempre anche le edizioni passate; "no" = mai."""
+    res = _search(settings, query, corsi, dove, limit, snippet_chars, archivi == "si")
+    res["archivi_inclusi"] = archivi == "si"
+    if archivi == "auto" and res["totale"] == 0 and res.get("termini"):
+        wider = _search(settings, query, corsi, dove, limit, snippet_chars, True)
+        if wider["totale"]:
+            wider["archivi_inclusi"] = True
+            wider["nota"] = "Nessun risultato nell'anno in corso: mostro le edizioni passate."
+            return wider
+    return res
+
+
+def _search(settings: Settings, query: str, corsi: list[str] | None, dove: tuple[str, ...], limit: int,
+            snippet_chars: int, with_archives: bool) -> dict[str, Any]:
     terms = terms_of(query)
     hits: list[dict[str, Any]] = []
     if not terms:
         return {"query": query, "risultati": [], "totale": 0}
-    for slug, course in settings.corsi.items():
-        if corsi and slug not in corsi:
-            continue
+    for course in _units(settings, corsi, with_archives):
+        slug = course.slug
+        edizione = course.anno_accademico
         if "mappa" in dove:
             for stem, card in index.load_schede(course).items():
                 text = card.get("riassunto", "") + " " + " ".join(c["nome"] for c in card.get("concetti", []))
                 if s := _score(text, terms):
-                    hits.append({"corso": slug, "fonte": "mappa", "lezione": stem, "punteggio": s + 5,
+                    hits.append({"corso": slug, "edizione": edizione, "fonte": "mappa", "lezione": stem, "punteggio": s + 5,
                                  "testo": card.get("riassunto", ""),
                                  "file": str(Layout.of(course).appunti / f"{stem}{naming.NOTES_SUFFIX}.md")})
         for source in dove:
@@ -97,10 +124,10 @@ def search(settings: Settings, query: str, corsi: list[str] | None = None,
                 for para, heading, stamp in _paragraphs(body):
                     if s := _score(para, terms):
                         text = " ".join(para.split())
-                        hits.append({"corso": slug, "fonte": source, "lezione": stem, "punteggio": s,
+                        hits.append({"corso": slug, "edizione": edizione, "fonte": source, "lezione": stem, "punteggio": s,
                                      "sezione": heading, "minuto": stamp, "file": str(path),
                                      "testo": text[:snippet_chars] + ("…" if len(text) > snippet_chars else "")})
-    hits.sort(key=lambda h: (-h["punteggio"], h["lezione"]))
+    hits.sort(key=lambda h: (-h["punteggio"], h["edizione"] != settings.corsi[h["corso"]].anno_accademico, h["lezione"]))
     for h in hits:
         n = naming.parse(h["lezione"])
         h["data"] = n.data.isoformat() if n else None

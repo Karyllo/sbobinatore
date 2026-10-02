@@ -103,6 +103,12 @@ Il materiale convertito in Markdown sta in `<corso>/materiale_md/` (stessa strut
 ### Fonti diverse per le registrazioni
 Le registrazioni di un corso possono stare in posti diversi: pagina WeBeep, archivio recman, sito del docente, link diretti. In sbob.toml un corso può avere `sorgenti = [ {...}, {...} ]`: sbob le legge tutte, unisce i duplicati e, se una fonte non funziona, usa le altre e avvisa. Per l'archivio recman (accessibile solo dal browser) segui la procedura "Registrazioni dall'archivio del Poli" qui sotto.
 
+### Anni precedenti (archivio)
+Un corso può avere edizioni passate (stesso docente) in `<corso>/archivio/<anno>/`, con la stessa struttura. La mappa (`mappa/INDICE.md`) ha una sezione "Edizione <anno>" e i concetti collegano le lezioni di tutti gli anni.
+- **Ricerca:** `sbob cerca` guarda l'anno in corso e solo se non trova niente anche gli anni passati (lo dice in `nota`); `--archivi` li include sempre. Ogni risultato ha il campo `edizione`.
+- **Rispondere:** cita sempre l'anno ("lezione 03 del 2024-25"). Se lo stesso argomento è spiegato meglio in un'altra edizione, dillo.
+- **Gestione:** `sbob archivio <slug> aggiungi [anno]` collega le edizioni con lo stesso codice e docente. Se il docente è diverso esce con exit 3 e l'azione `sbob archivio <slug> docenti`: la scelta del docente spetta all'utente. Qualsiasi passo accetta `--archivio <anno>`.
+
 ### Preparare un esame
 - Riassunto del corso: leggi `mappa/INDICE.md`.
 - Un file unico da caricare su NotebookLM o da dare a un LLM: `sbob merge <slug> --modo monolite --json`. Esce in `merge/`.

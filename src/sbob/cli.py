@@ -29,6 +29,7 @@ JsonOpt = Annotated[bool, typer.Option("--json", help="Output JSON su stdout (pe
 ForceOpt = Annotated[bool, typer.Option("--force", help="Rifai anche ciò che esiste già.")]
 DryOpt = Annotated[bool, typer.Option("--dry-run", help="Mostra cosa farebbe senza eseguire.")]
 OnlyOpt = Annotated[Optional[list[str]], typer.Option("--solo", help="Limita a queste lezioni (stem). Ripetibile.")]
+ArchOpt = Annotated[Optional[str], typer.Option("--archivio", help="Lavora sull'edizione passata di quell'anno (es. 2024-25), o `scegli` per sceglierla da un elenco.")]
 
 
 def _stdout_guard(as_json: bool):
@@ -76,11 +77,31 @@ def _print_report(r: StepReport) -> None:
         err.print(f"  [red]errore:[/red] {r.error}")
 
 
+def _resolve_course(settings: Settings, corso: str, archivio: str | None):
+    """Il corso, oppure la sua edizione passata (`--archivio <anno>`, o `scegli` per un elenco)."""
+    from sbob.core.archivio import archive_course
+
+    course = settings.corso(corso)
+    if not archivio:
+        return course
+    if archivio.lower() in ("scegli", "?"):
+        years = sorted(course.archivio, reverse=True)
+        if not years:
+            raise ConfigError(f"{corso} non ha edizioni passate: sbob archivio {corso} aggiungi")
+        if not sys.stdin.isatty():
+            raise ConfigError(f"Scegli l'anno con --archivio <anno> (configurati: {', '.join(years)})")
+        import questionary
+        archivio = questionary.select("Quale edizione?", choices=years).ask()
+        if not archivio:
+            raise ConfigError("Nessuna edizione scelta")
+    return archive_course(course, archivio)
+
+
 def _run_step(step: str, corso: str, *, force=False, dry_run=False, only=None, options=None,
-              quiet=False) -> StepReport:
+              quiet=False, archivio: str | None = None) -> StepReport:
     settings = _settings()
     try:
-        course = settings.corso(corso)
+        course = _resolve_course(settings, corso, archivio)
     except ConfigError as e:
         return StepReport(step=step, corso=corso, error=str(e))
     ctx = StepContext(settings, course, force=force, dry_run=dry_run,
@@ -132,11 +153,21 @@ def status(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso (
     except ConfigError as e:
         err.print(f"[red]{e}[/red]")
         raise typer.Exit(Exit.ERROR)
-    data = [course_status(c) for c in targets]
+    from sbob.core.archivio import archives_of
+
+    data = []
+    for c in targets:
+        d = course_status(c)
+        d["archivio"] = {a.anno_accademico: course_status(a) for a in archives_of(c)}      # edizioni passate
+        data.append(d)
     if as_json:
         sys.stdout.write(json.dumps(data[0] if corso else data, ensure_ascii=False, indent=2) + "\n")
         return
+    flat = []
     for d in data:
+        flat.append(d)
+        flat += [{**a, "nome": f"{d['nome']} — edizione {anno}"} for anno, a in d["archivio"].items()]
+    for d in flat:
         tot = d["totali"]
         mat = d["materiale"]
         out.print(f"[bold]{d['nome']}[/bold] ({d['corso']}) — {tot['lezioni']} lezioni · "
@@ -156,59 +187,59 @@ def status(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso (
 
 
 @app.command()
-def download(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
+def download(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
              tipo: Annotated[Optional[str], typer.Option(help="Forza il tipo: lez|ese|lab|sem|tde (default: dalla forma didattica dell'archivio, altrimenti lez)")] = None,
              links: Annotated[Optional[str], typer.Option(help="File di link alternativo a quello del corso.")] = None):
     """Scarica le registrazioni del corso in video/."""
-    _emit([_run_step("download", corso, force=force, dry_run=dry_run, quiet=as_json,
+    _emit([_run_step("download", corso, archivio=archivio, force=force, dry_run=dry_run, quiet=as_json,
                      options={"tipo": tipo, "links": links})], as_json)
 
 
 @app.command()
-def audio(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+def audio(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
           as_json: JsonOpt = False):
     """Estrae l'audio (.aac) dai video."""
-    _emit([_run_step("audio", corso, force=force, dry_run=dry_run, only=only, quiet=as_json)], as_json)
+    _emit([_run_step("audio", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json)], as_json)
 
 
 @app.command()
-def trascrivi(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+def trascrivi(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
               as_json: JsonOpt = False,
               backend: Annotated[Optional[str], typer.Option(help="gemini|notebooklm|html (whisper: non mantenuto)")] = None,
               html_dir: Annotated[Optional[str], typer.Option("--html-dir", help="Per backend html: cartella export.")] = None):
     """Trascrive gli audio in trascrizioni/."""
-    _emit([_run_step("trascrivi", corso, force=force, dry_run=dry_run, only=only, quiet=as_json,
+    _emit([_run_step("trascrivi", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
                      options={"backend": backend, "html_dir": html_dir})], as_json)
 
 
 @app.command()
-def appunti(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+def appunti(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
             as_json: JsonOpt = False,
             refiner: Annotated[Optional[str], typer.Option(help="provider[:modello], es. deepseek")] = None,
             notes: Annotated[Optional[str], typer.Option(help="provider[:modello], es. anthropic:claude-sonnet-5-5")] = None):
     """Genera le dispense dalle trascrizioni."""
-    _emit([_run_step("appunti", corso, force=force, dry_run=dry_run, only=only, quiet=as_json,
+    _emit([_run_step("appunti", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
                      options={"refiner": refiner, "notes": notes})], as_json)
 
 
 @app.command()
-def merge(corso: str, as_json: JsonOpt = False,
+def merge(corso: str, archivio: ArchOpt = None, as_json: JsonOpt = False,
           modo: Annotated[str, typer.Option(help="split|monolite|tde")] = "monolite",
           da: Annotated[str, typer.Option(help="appunti|trascrizioni|materiale")] = "appunti"):
     """Unisce i file del corso in merge/ (per NotebookLM o un LLM)."""
-    _emit([_run_step("merge", corso, quiet=as_json, options={"modo": modo, "da": da})], as_json)
+    _emit([_run_step("merge", corso, archivio=archivio, quiet=as_json, options={"modo": modo, "da": da})], as_json)
 
 
 @app.command()
-def link(corso: str, as_json: JsonOpt = False,
+def link(corso: str, archivio: ArchOpt = None, as_json: JsonOpt = False,
          url: Annotated[Optional[str], typer.Option(help="Link all'archivio (modulo WeBeep o getservizio); default: dal corso WeBeep collegato.")] = None):
     """Raccoglie i link delle registrazioni dall'archivio del Poli e li scrive in <corso>/link_archivio.txt (nessun download)."""
     from sbob.steps.download import archive_links
 
     s = _settings()
     try:
-        course = s.corso(corso)
-        ctx = StepContext(s, course, quiet=as_json)
+        course = _resolve_course(s, corso, archivio)
+        ctx = StepContext(s, course, quiet=as_json, step="link")
         course.cartella.mkdir(parents=True, exist_ok=True)
         with _stdout_guard(as_json):
             path = archive_links(ctx, {"tipo": "archivio", **({"url": url} if url else {})})
@@ -222,13 +253,13 @@ def link(corso: str, as_json: JsonOpt = False,
 
 
 @app.command()
-def materiale(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+def materiale(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
               as_json: JsonOpt = False,
               modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per la conversione dei PDF")] = None,
               converti: Annotated[Optional[bool], typer.Option("--converti/--senza-conversione",
                   help="Converte in Markdown (default: [materiale] converti in sbob.toml, altrimenti sì).")] = None):
     """Scarica il materiale da WeBeep (nuovo o modificato) e lo converte in Markdown in <corso>/materiale_md/."""
-    _emit([_run_step("materiale", corso, force=force, dry_run=dry_run, only=only, quiet=as_json,
+    _emit([_run_step("materiale", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
                      options={"modello": modello, "converti": converti})], as_json)
 
 
@@ -276,11 +307,11 @@ def webeep_collega(corso: str, webeep_id: int):
 
 
 @app.command()
-def mappa(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+def mappa(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
           as_json: JsonOpt = False,
           modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per il ruolo mappa")] = None):
     """Schede per l'agente (riassunto, concetti, prerequisiti) in <corso>/mappa/, poi rigenera gli indici."""
-    _emit([_run_step("mappa", corso, force=force, dry_run=dry_run, only=only, quiet=as_json,
+    _emit([_run_step("mappa", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
                      options={"modello": modello})], as_json)
 
 
@@ -307,6 +338,8 @@ def cerca(query: Annotated[str, typer.Argument(help='Termini (tutti devono compa
           corso: Annotated[Optional[list[str]], typer.Option("--corso", help="Limita a questi corsi. Ripetibile.")] = None,
           dove: Annotated[Optional[list[str]], typer.Option("--in", help="mappa|appunti|trascrizioni|materiale. Ripetibile.")] = None,
           limite: Annotated[int, typer.Option(help="Numero massimo di risultati.")] = 20,
+          archivi: Annotated[Optional[bool], typer.Option("--archivi/--senza-archivi",
+              help="Include le edizioni passate. Default: solo l'anno in corso, e se non trova niente anche le passate.")] = None,
           as_json: JsonOpt = False):
     """Cerca nei corsi: restituisce lezione, sezione, minuto e il paragrafo giusto."""
     from sbob.core.search import SOURCES, search
@@ -315,13 +348,19 @@ def cerca(query: Annotated[str, typer.Argument(help='Termini (tutti devono compa
     if bad:
         err.print(f"[red]--in non valido: {bad} (validi: {', '.join(SOURCES)})[/red]")
         raise typer.Exit(Exit.ERROR)
-    res = search(_settings(), query, corso, tuple(dove) if dove else SOURCES, limite)
+    settings_ = _settings()
+    s_years = {k: c.anno_accademico for k, c in settings_.corsi.items()}
+    res = search(settings_, query, corso, tuple(dove) if dove else SOURCES, limite,
+                 archivi={None: "auto", True: "si", False: "no"}[archivi])
     if as_json:
         sys.stdout.write(json.dumps(res, ensure_ascii=False, indent=2) + "\n")
         return
     err.print(f"{res['totale']} risultati per {query!r}" + (f" (mostro {limite})" if res["totale"] > limite else ""))
+    if res.get("nota"):
+        err.print(f"[yellow]{res['nota']}[/yellow]")
     for h in res["risultati"]:
         where = " · ".join(x for x in (h["corso"], h["lezione"], h["fonte"], h.get("sezione"),
+                                        f"edizione {h['edizione']}" if h["edizione"] != s_years.get(h["corso"]) else None,
                                         f"min {h['minuto']}" if h.get("minuto") else None) if x)
         out.print(f"[bold]{where}[/bold]\n  {h['testo']}\n  [dim]{h['file']}[/dim]")
 
@@ -388,7 +427,7 @@ def pdf(path: Annotated[str, typer.Argument(help="File .pdf o cartella di PDF.")
 
 
 @app.command()
-def run(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
+def run(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
         da: Annotated[str, typer.Option("--da", help="Primo passo.")] = PIPELINE[0],
         fino_a: Annotated[str, typer.Option("--fino-a", help="Ultimo passo.")] = PIPELINE[-1]):
     """Esegue la catena materiale → download → audio → trascrivi → appunti → mappa. Si ferma se un passo richiede l'utente."""
@@ -399,7 +438,7 @@ def run(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, as_json: J
         raise typer.Exit(Exit.ERROR)
     reports, pending = [], set()
     for step in steps:
-        r = _run_step(step, corso, force=force, dry_run=dry_run, quiet=as_json)
+        r = _run_step(step, corso, archivio=archivio, force=force, dry_run=dry_run, quiet=as_json)
         if dry_run and pending:
             # in simulazione i passi precedenti non hanno prodotto file: aggiungo ciò che produrrebbero
             extra = pending - set(r.done) - set(r.skipped)
@@ -507,6 +546,21 @@ def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascr
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, dst)
     err.print(f"[green]Skill installata in {dst}.[/green] Riavvia Claude Code per vederla.")
+
+
+@app.command("archivio")
+def archivio_cmd(corso: str,
+                 azione: Annotated[str, typer.Argument(help="aggiungi | docenti | elenco")],
+                 anno: Annotated[Optional[str], typer.Argument(help="Anno accademico, es. 2024-25 (per `aggiungi`).")] = None,
+                 docente: Annotated[Optional[str], typer.Option("--docente", help="Docente da usare per questa aggiunta (altrimenti: quello del corso).")] = None,
+                 id_webeep: Annotated[Optional[int], typer.Option("--id", help="Forza l'id del corso WeBeep di quell'anno (salta il controllo del docente).")] = None,
+                 as_json: JsonOpt = False):
+    """Edizioni passate dello stesso corso (stesso docente) come sottocartelle: <corso>/archivio/<anno>/.
+
+    aggiungi [anno]: collega le edizioni con lo stesso codice e docente · docenti: scegli il docente · elenco."""
+    from sbob.archivio_cmd import run_archivio
+
+    _emit([run_archivio(_settings(), corso, azione, anno, docente, id_webeep, as_json)], as_json)
 
 
 @app.command()
