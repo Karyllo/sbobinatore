@@ -89,7 +89,7 @@ def wanted_sources(ctx: StepContext, state: dict) -> dict[str, str]:
 
 
 def _file_for(ctx: StepContext, title: str, text: str) -> Path:
-    path = ctx.layout.state / "notebook" / f"{_UNSAFE.sub(' ', title).strip()}.md"
+    path = ctx.layout.notebook / f"{_UNSAFE.sub(' ', title).strip()}.md"
     atomic_write_text(path, text)
     return path.resolve()           # il CLI rifiuta i symlink (su macOS anche /tmp)
 
@@ -141,6 +141,7 @@ def sync(ctx: StepContext, rep: StepReport, nb_id: str, wanted: dict[str, str], 
             if known[title]["id"] in on_server:
                 nlm.delete_source(nb_id, known[title]["id"])
             del known[title]
+            (ctx.layout.notebook / f"{_UNSAFE.sub(' ', title).strip()}.md").unlink(missing_ok=True)   # file generato da noi
             rep.done.append(f"rimossa: {title}")
         except RuntimeError as e:
             rep.fail(title, str(e))

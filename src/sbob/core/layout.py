@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sbob.config import Course
 
-STEP_DIRS = ("materiale", "materiale_md", "video", "audio", "trascrizioni", "appunti", "merge")
+STEP_DIRS = ("materiale", "materiale_md", "video", "audio", "trascrizioni", "appunti", "merge", "notebook")
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,11 @@ class Layout:
     def mappa(self) -> Path:
         """Livello di navigazione per l'agente (riassunti, concetti, indice): separato dagli appunti."""
         return self.base / "mappa"
+
+    @property
+    def notebook(self) -> Path:
+        """File uniti caricati su NotebookLM (uno per sorgente): generati da `sbob notebook`, si possono aprire e controllare."""
+        return self.base / "notebook"
 
     @property
     def state(self) -> Path:
