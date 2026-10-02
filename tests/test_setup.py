@@ -39,8 +39,10 @@ def test_doctor_reports_missing_with_fix(settings, monkeypatch):
     for k in [k for k in os.environ if k.startswith("GOOGLE_API_KEY")]:
         monkeypatch.delenv(k)
     monkeypatch.setattr(doctor, "check_login", lambda: [])             # niente rete nei test
+    from sbob.core import secrets
+    monkeypatch.setattr(secrets, "cookie_names", lambda: [])          # niente credenziali vere
     checks = {c["nome"]: c for c in doctor.run_checks(settings, quick=True)}
     assert checks["ffmpeg"]["stato"] == "manca" and "ffmpeg" in checks["ffmpeg"]["rimedio"]
     assert checks["chiavi gemini"]["stato"] == "manca" and "GOOGLE_API_KEY_ACCOUNT1" in checks["chiavi gemini"]["rimedio"]
     assert checks["config"]["stato"] == "ok"
-    assert checks["downloader"]["stato"] == "manca" and "uv" in checks["downloader"]["rimedio"]   # default git, uv assente
+    assert checks["accesso Webex"]["rimedio"] == "sbob login"

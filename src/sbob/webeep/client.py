@@ -112,6 +112,14 @@ class WebeepClient:
                                           int(f.get("filesize") or 0), int(f.get("timemodified") or 0)))
         return out
 
+    def text(self, fileurl: str) -> str:
+        """Contenuto testuale di un file Moodle (es. l'index.html di una pagina)."""
+        try:
+            r = self._http.get(fileurl, params={"token": self._token}, timeout=60)
+        except requests.RequestException as e:
+            raise RuntimeError(f"WeBeep non raggiungibile: {type(e).__name__}") from None
+        return r.text if r.ok else ""
+
     def download(self, f: RemoteFile, dst: Path) -> None:
         """Scarica in un file temporaneo e lo rinomina (mai un file a metà); mtime = data di modifica del server.
         Nota: per i file Moodle il parametro si chiama `token`, non `wstoken`."""

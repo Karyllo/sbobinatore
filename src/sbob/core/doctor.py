@@ -7,20 +7,13 @@ funzionare; "avviso" = opzionale o non verificabile.
 from __future__ import annotations
 
 import importlib.util
-import json
 import platform
 import shutil
-import subprocess
-from pathlib import Path
 from typing import Any
 
 from sbob.config import Settings
 from sbob.core.keys import load_keys
 
-PRD_COOKIES = {
-    "Darwin": Path.home() / "Library" / "Application Support" / "polimi_recordings_downloader" / "cookies.json",
-    "Linux": Path.home() / ".config" / "polimi_recordings_downloader" / "cookies.json",
-}
 _SDK = {"gemini": ("google.genai", "gemini"), "openai": ("openai", "openai"), "anthropic": ("anthropic", "anthropic")}
 
 
@@ -90,38 +83,13 @@ def check_models(settings: Settings) -> list[dict]:
     return out
 
 
-def check_downloader(settings: Settings, quick: bool = False) -> list[dict]:
-    from sbob.core.report import NeedsHuman
-    from sbob.steps.download import prd_command
+def check_webex(settings: Settings) -> list[dict]:
+    """Registrazioni: serve il cookie `ticket` di Webex (lo salva `sbob login`). Solo il nome, mai il valore."""
+    from sbob.core.secrets import cookie_names
 
-    try:
-        cmd, env = prd_command(settings)
-    except NeedsHuman as e:
-        return [_check("downloader", False, str(e), e.action)]
-    out = []
-    if quick:
-        out.append(_check("downloader", True, f"{settings.downloader} (non avviato: --veloce)"))
-    else:
-        res = subprocess.run([*cmd, "--help"], capture_output=True, text=True, env=env, timeout=600)
-        ok = res.returncode == 0 and "Usage" in res.stdout
-        tail = (res.stderr or res.stdout).strip().splitlines()[-1:] if not ok else []
-        out.append(_check("downloader", ok, settings.downloader + (f" · {tail[0]}" if tail else ""),
-                          "controlla `downloader` in sbob.toml; serve uv per gli indirizzi git"))
-    cookies_file = PRD_COOKIES.get(platform.system())
-    cookies = {}
-    if cookies_file and cookies_file.exists():
-        try:
-            cookies = json.loads(cookies_file.read_text())
-        except json.JSONDecodeError:
-            pass
-    out.append(_check("cookie ticket", "ticket" in cookies,
-                      "presente (la scadenza si scopre solo al download)" if "ticket" in cookies else "non impostato",
-                      "copia il cookie 'ticket' da politecnicomilano.webex.com e lancia: sbob cookie ticket <valore>",
-                      opzionale=True))
-    if any(s.get("tipo") == "webeep" for c in settings.corsi.values() for s in c.sorgenti):
-        out.append(_check("cookie MoodleSession", "MoodleSession" in cookies, "serve alla sorgente webeep",
-                          "sbob cookie MoodleSession <valore> (da webeep.polimi.it)", opzionale=True))
-    return out
+    has = "ticket" in cookie_names()
+    return [_check("accesso Webex", has, "ticket presente (si rinnova da solo finché la sessione di Ateneo è valida)"
+                   if has else "mai fatto `sbob login`", "sbob login", opzionale=True)]
 
 
 def check_secrets() -> list[dict]:
@@ -182,4 +150,4 @@ def check_optional(settings: Settings) -> list[dict]:
 
 def run_checks(settings: Settings, quick: bool = False) -> list[dict[str, Any]]:
     return [*check_config(settings), *check_binaries(), *check_models(settings),
-            *check_downloader(settings, quick), *check_secrets(), *check_login(), *check_optional(settings)]
+            *check_webex(settings), *check_secrets(), *check_login(), *check_optional(settings)]

@@ -1,206 +1,228 @@
 from datetime import datetime
 
 import pytest
-from openpyxl import Workbook
 
+from sbob import webex
 from sbob.core.layout import Layout
 from sbob.core.report import NeedsHuman
 from sbob.steps import download
 from sbob.steps.base import StepContext
 
 ID1, ID2, ID3 = "a" * 32, "b" * 32, "c" * 32
-URL = "https://politecnicomilano.webex.com/recordingservice/sites/politecnicomilano/recording/{}"
+URL = "https://politecnicomilano.webex.com/recordingservice/sites/politecnicomilano/recording/{}/playback"
 
 
-def _fake_prd(recordings, calls, subjects=None):
-    """Imita prd: con --no-aria2c scrive l'xlsx; con `txt` crea gli mp4 degli id richiesti."""
-    def fake(settings, args, cwd):
-        calls.append(args)
-        out = download.Path(args[args.index("--output") + 1])
-        if "--no-aria2c" in args:
-            wb = Workbook()
-            ws = wb.active
-            ws.append(["Link", "Academic year", "Recording date", "Subject"])
-            for i, (key, vid) in enumerate(recordings.items(), 2):
-                ws.cell(i, 1, "Link").hyperlink = URL.format(vid)
-                ws.cell(i, 3, datetime.strptime(key, "%Y-%m-%d %H-%M").strftime("%Y-%m-%d %H:%M"))
-                ws.cell(i, 4, (subjects or {}).get(key, ""))
-            (out / "x 2025-26").mkdir(parents=True)
-            wb.save(out / "x 2025-26" / "x.xlsx")
-        else:
-            wanted = set(open(args[1]).read().split())
-            (out / "prova 2025-26").mkdir(parents=True)
-            for key, vid in recordings.items():
-                if vid in wanted:
-                    (out / "prova 2025-26" / f"{key}.mp4").write_text("video")
-        return download.subprocess.CompletedProcess(args, 0, "", "")
-    return fake
+class FakeWebex:
+    """Webex finto: `created` = id → "YYYY-MM-DD HH:MM:SS" (data che darebbe l'API); registra le chiamate."""
+
+    def __init__(self, monkeypatch, created, expired_first=0):
+        self.created, self.info_calls, self.downloaded = created, [], []
+        self.expired = expired_first
+        monkeypatch.setattr(download, "_ticket_session", lambda ctx, renew=False: self.session(renew))
+        monkeypatch.setattr(download.webex, "recordings", self.recordings)
+        monkeypatch.setattr(download.webex, "download", self.download)
+        self.renewed = 0
+
+    def session(self, renew):
+        self.renewed += renew
+        return object()
+
+    def recordings(self, ids, http, workers=8):
+        if self.expired:
+            self.expired -= 1
+            raise webex.TicketError("scaduto")
+        ids = list(ids)
+        self.info_calls.append(ids)
+        return {v: webex.Recording(id=v, name="Stanza personale", created=datetime.strptime(self.created[v], "%Y-%m-%d %H:%M:%S"),
+                                   created_gmt=None, url=f"https://cdn/{v}.mp4") for v in ids}
+
+    def download(self, items, dest, log=print, connections=16):
+        dest.mkdir(parents=True, exist_ok=True)
+        out = {}
+        for r, n in items:
+            (dest / f"{n}.mp4").write_text("video")
+            out[r.id] = dest / f"{n}.mp4"
+            self.downloaded.append(r.id)
+        return out
+
+
+def links(course, *ids, extra=""):
+    (course.cartella / "link.txt").write_text("".join(URL.format(i) + "\n" for i in ids) + extra)
 
 
 @pytest.fixture
 def course_with_links(settings):
     c = settings.corso("prova")
     c.cartella.mkdir(parents=True)
-    (c.cartella / "link.txt").write_text("x\n")
+    (c.cartella / "link.txt").write_text("")
     return c
 
 
 def test_download_numbers_and_is_incremental(settings, course_with_links, monkeypatch):
-    c, calls = course_with_links, []
-    recs = {"2025-09-18 10-00": ID2, "2025-09-17 09-30": ID1}
-    monkeypatch.setattr(download, "_run_prd", _fake_prd(recs, calls))
-
+    c = course_with_links
+    fake = FakeWebex(monkeypatch, {ID2: "2025-09-18 10:00:00", ID1: "2025-09-17 09:30:00", ID3: "2025-09-24 16:00:00"})
+    links(c, ID2, ID1)
     rep = download.run(StepContext(settings, c, quiet=True))
     assert rep.done == ["2025-09-17_prova_lez01", "2025-09-18_prova_lez02"]
     lay = Layout.of(c)
     assert (lay.video / "2025-09-17_prova_lez01.mp4").exists()
 
-    # secondo giro: nulla di nuovo, nessuno scarico
-    calls.clear()
-    rep2 = download.run(StepContext(settings, c, quiet=True))
-    assert rep2.done == [] and len(rep2.skipped) == 2
-    assert all("--no-aria2c" in a for a in calls)
+    fake.info_calls.clear()
+    rep2 = download.run(StepContext(settings, c, quiet=True))          # nulla di nuovo: nessuna chiamata a Webex
+    assert rep2.done == [] and len(rep2.skipped) == 2 and fake.info_calls == []
 
-    # compare una registrazione nuova: numerazione continua, scarica solo quella
-    recs["2025-09-24 16-00"] = ID3
-    calls.clear()
+    links(c, ID2, ID1, ID3)                                            # nuova: numerazione continua, scarica solo quella
     rep3 = download.run(StepContext(settings, c, quiet=True))
-    assert rep3.done == ["2025-09-24_prova_lez03"]
-    assert open(lay.staging / "ids.txt").read().split() == [ID3]
+    assert rep3.done == ["2025-09-24_prova_lez03"] and fake.info_calls == [[ID3]] and fake.downloaded[-1] == ID3
+
+
+def test_legacy_manifest_keys_are_recognised_and_relinked(settings, course_with_links, monkeypatch):
+    import json
+    c = course_with_links
+    lay = Layout.of(c)
+    lay.state.mkdir(parents=True)
+    (lay.state / "manifest.json").write_text(json.dumps({"videos": {"2025-09-17 09-30": "2025-09-17_prova_lez01"}}))
+    fake = FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00"})
+    links(c, ID1)
+    rep = download.run(StepContext(settings, c, quiet=True))
+    assert rep.done == [] and rep.skipped == ["2025-09-17_prova_lez01"] and not fake.downloaded
+    assert json.loads((lay.state / "manifest.json").read_text())["videos"][ID1] == "2025-09-17_prova_lez01"
 
 
 def test_dry_run_does_not_download(settings, course_with_links, monkeypatch):
-    calls = []
-    monkeypatch.setattr(download, "_run_prd", _fake_prd({"2025-09-17 09-30": ID1}, calls))
+    fake = FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00"})
+    links(course_with_links, ID1)
     rep = download.run(StepContext(settings, course_with_links, dry_run=True, quiet=True))
     assert rep.done == ["2025-09-17_prova_lez01"] and rep.dry_run
-    assert len(calls) == 1 and not Layout.of(course_with_links).video.exists()
-
-
-def test_expired_ticket_needs_human():
-    res = download.subprocess.CompletedProcess([], 1, "Try refreshing the ticket", "")
-    with pytest.raises(NeedsHuman) as e:
-        download._check_output(res)
-    assert "sbob cookie ticket" in e.value.action
-    res = download.subprocess.CompletedProcess([], 1, "Generating... 'downloadRecordingInfo'", "")
-    with pytest.raises(NeedsHuman):
-        download._check_output(res)
-
-
-def test_cookie_help_depends_on_source():
-    res = download.subprocess.CompletedProcess([], 1, "ValueError: cookie MoodleSession not set", "")
-    with pytest.raises(NeedsHuman) as e:
-        download._check_output(res, "webeep")
-    assert "MoodleSession" in e.value.action and "ticket" in e.value.action
-    assert "JSESSIONID" in download.cookie_help("archives") and "MoodleSession" not in download.cookie_help("txt")
-
-
-def test_archive_forma_sets_type_and_topic(settings, course_with_links, monkeypatch):
-    c, calls = course_with_links, []
-    recs = {"2026-05-18 12-32": ID1, "2026-05-19 15-32": ID2, "2026-05-21 10-31": ID3}
-    subjects = {"2026-05-18 12-32": "[Laboratorio] Laboratorio 5 EDP: Poisson 2D",
-                "2026-05-19 15-32": "[Lezione] Analisi Galerkin-FEM 1", "2026-05-21 10-31": "[Lezione] Analisi Galerkin-FEM 2"}
-    monkeypatch.setattr(download, "_run_prd", _fake_prd(recs, calls, subjects))
-    rep = download.run(StepContext(settings, c, quiet=True))
-    assert sorted(rep.done) == ["2026-05-18_prova_lab01", "2026-05-19_prova_lez01", "2026-05-21_prova_lez02"]
-    m = c.cartella / ".sbob" / "manifest.json"
-    import json
-    assert json.loads(m.read_text())["meta"]["2026-05-19_prova_lez01"]["argomento"] == "Analisi Galerkin-FEM 1"
-
-
-def test_archives_cookie_help():
-    h = download.cookie_help("archives")
-    assert "JSESSIONID" in h and "INGRESSCOOKIE" in h and "onlineservices.polimi.it" in h
+    assert not fake.downloaded and not Layout.of(course_with_links).video.exists()
 
 
 def test_enriched_links_file_sets_type_topic_and_date(settings, course_with_links, monkeypatch):
-    c, calls = course_with_links, []
-    (c.cartella / "link.txt").write_text(
-        "# commento\n"
-        f"https://x.webex.com/recordingservice/sites/x/recording/{ID1}/playback\t08/05/2026 10:33\tLezione\tDF Trasporto 4\n"
-        f"https://x.webex.com/recordingservice/sites/x/recording/{ID2}/playback\t07/05/2026 10:31\tLaboratorio\tLab 3\n")
-    # Webex dà date sbagliate (10/05 01:45 e 16/05): devono vincere quelle dell'archivio
-    recs = {"2026-05-10 01-45": ID1, "2026-05-16 17-20": ID2}
-    monkeypatch.setattr(download, "_run_prd", _fake_prd(recs, calls))
+    import json
+    c = course_with_links
+    links(c, extra="# commento\n"
+          f"{URL.format(ID1)}\t08/05/2026 10:33\tLezione\tDF Trasporto 4\n"
+          f"{URL.format(ID2)}\t07/05/2026 10:31\tLaboratorio\tLab 3\n")
+    FakeWebex(monkeypatch, {ID1: "2026-05-10 01:45:00", ID2: "2026-05-16 17:20:00"})   # Webex: date sbagliate
     rep = download.run(StepContext(settings, c, quiet=True))
     assert sorted(rep.done) == ["2026-05-07_prova_lab01", "2026-05-08_prova_lez01"]
-    sent = open(calls[0][1]).read().split()
-    assert len(sent) == 2 and all("\t" not in l and not l.startswith("#") for l in sent)   # a prd solo i link
+    meta = json.loads((c.cartella / ".sbob" / "manifest.json").read_text())["meta"]
+    assert meta["2026-05-08_prova_lez01"]["argomento"] == "DF Trasporto 4"
 
 
-def test_prd_command_modes(settings, tmp_path, monkeypatch):
-    clone = tmp_path / "clone"
-    (clone / ".venv" / "bin").mkdir(parents=True)
-    (clone / ".venv" / "bin" / "python").write_text("")
-    settings.downloader = str(clone)
-    cmd, env = download.prd_command(settings)
-    assert cmd[0].endswith(".venv/bin/python") and str(clone) in env["PYTHONPATH"]       # venv locale
-
-    monkeypatch.setattr(download.shutil, "which", lambda n: "/usr/bin/uv")
-    settings.downloader = "git+https://github.com/x/y@b"
-    cmd, _ = download.prd_command(settings)
-    assert cmd[:5] == ["/usr/bin/uv", "run", "--no-project", "--quiet", "--with"] and cmd[5] == "git+https://github.com/x/y@b"
-
-    settings.downloader = str(tmp_path / "manca")
-    with pytest.raises(NeedsHuman):
-        download.prd_command(settings)
-    monkeypatch.setattr(download.shutil, "which", lambda n: None)
-    settings.downloader = "git+https://github.com/x/y"
-    with pytest.raises(NeedsHuman) as e:
-        download.prd_command(settings)
-    assert "uv" in e.value.action
-
-
-def test_expired_cookie_triggers_silent_renew_and_retry(settings, course_with_links, monkeypatch):
-    c, calls = course_with_links, []
-    good = _fake_prd({"2025-09-17 09-30": ID1}, calls)
-    state = {"n": 0}
-
-    def flaky(settings, args, cwd):
-        state["n"] += 1
-        if state["n"] == 1:                                   # primo tentativo: ticket scaduto
-            return download.subprocess.CompletedProcess(args, 1, "Try refreshing the ticket", "")
-        return good(settings, args, cwd)
-    monkeypatch.setattr(download, "_run_prd", flaky)
-    monkeypatch.setattr(download, "try_renew_login", lambda ctx: True)
+def test_expired_ticket_renews_once_then_needs_human(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    links(c, ID1)
+    fake = FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00"}, expired_first=1)
     rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
-    assert rep.done == ["2025-09-17_prova_lez01"] and state["n"] == 2
-
-    state["n"] = 0
-    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)  # rinnovo impossibile → serve l'utente
+    assert rep.done == ["2025-09-17_prova_lez01"] and fake.renewed == 1
+    FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00"}, expired_first=2)
     with pytest.raises(NeedsHuman) as e:
         download.run(StepContext(settings, c, dry_run=True, quiet=True))
-    assert e.value.action.startswith("sbob login")
+    assert e.value.action == "sbob login"
+
+
+def test_missing_ticket_needs_login(settings, course_with_links, monkeypatch):
+    from sbob.core import secrets
+    links(course_with_links, ID1)
+    monkeypatch.setattr(secrets, "load_cookie", lambda name: None)
+    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)
+    with pytest.raises(NeedsHuman) as e:
+        download.run(StepContext(settings, course_with_links, dry_run=True, quiet=True))
+    assert e.value.action == "sbob login"
 
 
 def test_multiple_sources_merge_dedupe_and_survive_a_failing_one(settings, course_with_links, monkeypatch):
-    c, calls = course_with_links, []
+    c = course_with_links
     c.sorgenti = [{"tipo": "txt", "file": "link.txt"}, {"tipo": "webpage-url", "url": "https://prof.example/lezioni"},
-                  {"tipo": "webeep", "url": "https://webeep.polimi.it/x"}]
-    plans = {
-        "txt": {"2025-09-17 09-30": ID1},
-        "webpage-url": {"2025-09-17 09-30": ID1, "2025-09-24 10-00": ID2},   # ID1 compare anche qui: una sola volta
-    }
+                  {"tipo": "webeep", "url": "https://webeep.polimi.it/course/view.php?id=7"}]
+    links(c, ID1)
+    page = f'<a href="{URL.format(ID1)}">uno</a> <a href="https://www.google.com/url?q={URL.format(ID2)}&sa=D">due</a>' \
+           '<a href="https://politecnicomilano.webex.com/wbxmjs/joinservice/sites/x/meeting/download/abc">aula</a>'
 
-    def fake(settings, args, cwd):
-        calls.append(args[0])
-        if args[0] == "webeep":                                              # questa fonte fallisce (cookie)
-            return download.subprocess.CompletedProcess(args, 1, "The cookie MoodleSession is not set.", "")
-        return _fake_prd(plans[args[0]], [])(settings, args, cwd)
-    monkeypatch.setattr(download, "_run_prd", fake)
-    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)
+    class R:
+        status_code, text = 200, page
+    import requests
+    monkeypatch.setattr(requests, "get", lambda *a, **k: R())
+
+    def broken(course, src):
+        raise NeedsHuman("Token WeBeep mancante", action="sbob login")
+    monkeypatch.setattr(download, "webeep_links", broken)
+    FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00", ID2: "2025-09-24 10:00:00"})
     rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
-    assert rep.done == ["2025-09-17_prova_lez01", "2025-09-24_prova_lez02"]        # unione senza duplicati
+    assert rep.done == ["2025-09-17_prova_lez01", "2025-09-24_prova_lez02"]        # unione senza duplicati, aula esclusa
     assert len(rep.warnings) == 1 and "fonte 3 (webeep)" in rep.warnings[0] and rep.exit_code == 2
 
 
 def test_all_sources_failing_is_an_error(settings, course_with_links, monkeypatch):
     c = course_with_links
-    c.sorgenti = [{"tipo": "webeep", "url": "https://webeep.polimi.it/x"}]
-    monkeypatch.setattr(download, "_run_prd", lambda *a: download.subprocess.CompletedProcess([], 1, "The cookie MoodleSession is not set.", ""))
-    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)
+    c.sorgenti = [{"tipo": "webeep"}]
+    c.webeep_id = None
     with pytest.raises(NeedsHuman):
         download.run(StepContext(settings, c, dry_run=True, quiet=True))
+
+
+def test_webeep_source_reads_url_modules_and_types(settings, course_with_links, monkeypatch):
+    from sbob.webeep import client as wc
+    c = course_with_links
+    c.webeep_id = 7
+    sections = [{"section": 1, "summary": "", "modules": [
+        {"id": 10, "modname": "url", "name": "2025-09-19 Lez 01 - introduzione",
+         "contents": [{"type": "url", "fileurl": URL.format(ID1)}]},
+        {"id": 11, "modname": "url", "name": "Esercitazione 1",
+         "contents": [{"type": "url", "fileurl": URL.format(ID2)}]},
+        {"id": 12, "modname": "url", "name": "Aula virtuale",
+         "contents": [{"type": "url", "fileurl": "https://politecnicomilano.webex.com/meet/x"}]}]},
+        {"section": 2, "summary": f'<a href="{URL.format(ID3)}">x</a>', "modules": []}]
+
+    class C:
+        def __init__(self, token): pass
+        def call(self, fn, **kw):
+            assert kw["courseid"] == 7
+            return sections
+    monkeypatch.setattr(wc, "WebeepClient", C)
+    got = download.webeep_links(c, {"tipo": "webeep"})
+    assert [(u[-41:-9], m.get("tipo")) for u, m in got] == [(ID1, "lez"), (ID2, "ese"), (ID3, None)]
+    only_sec = download.webeep_links(c, {"tipo": "webeep", "url": "https://webeep.polimi.it/course/view.php?id=7&section=2"})
+    assert len(only_sec) == 1
+
+
+def test_video_id_and_links_in_html():
+    http = None
+    assert webex.video_id(URL.format(ID1), http) == ID1
+    assert webex.video_id(f"https://politecnicomilano.webex.com/webappng/sites/politecnicomilano/recording/{ID2}", http) == ID2
+    assert webex.video_id(ID3, http) == ID3
+    assert webex.video_id("https://politecnicomilano.webex.com/meet/prof", http) is None
+    html = f'<a href="https://www.google.com/url?q={URL.format(ID1)}&amp;sa=D">a</a> <a href=\'{URL.format(ID1)}\'>b</a>'
+    assert webex.links_in_html(html) == [URL.format(ID1)]
+
+
+def test_tipo_from_title():
+    assert download.tipo_from_title("2025-09-19 Lez 01 - introduzione") == "lez"
+    assert download.tipo_from_title("Es. 3 - integrali") == "ese" and download.tipo_from_title("Laboratorio 2") == "lab"
+    assert download.tipo_from_title("Registrazione del 3 marzo") is None
+
+
+def test_recording_api_errors(monkeypatch):
+    class Resp:
+        def __init__(self, status, data, ctype="application/json"):
+            self.status_code, self._d, self.headers = status, data, {"content-type": ctype}
+        def json(self): return self._d
+
+    class H:
+        def __init__(self, r): self.r = r
+        def get(self, *a, **k): return self.r
+    with pytest.raises(webex.TicketError):
+        webex.recording(ID1, H(Resp(403, {"code": 53004, "message": "Recording required logged before access"})))
+    with pytest.raises(webex.TicketError):
+        webex.recording(ID1, H(Resp(200, {}, "text/html")))
+    ok = {"recordName": "x", "createTime": "2026-06-04 12:32:30", "gmtCreateTime": "2026-06-04 10:32:30",
+          "preventDownload": False, "duration": 2525000, "fileSize": 9,
+          "downloadRecordingInfo": {"downloadInfo": {"mp4URL": "https://cdn/x.mp4", "hlsURL": "https://cdn/x.m3u8"}}}
+    r = webex.recording(ID1, H(Resp(200, ok)))
+    assert r.url.endswith(".mp4") and not r.hls and r.legacy_key == "2026-06-04 12-32" and r.duration_s == 2525
+    r = webex.recording(ID1, H(Resp(200, {**ok, "preventDownload": True})))
+    assert r.hls and r.url.endswith(".m3u8")
 
 
 def test_config_accepts_list_or_single_source(tmp_path, monkeypatch):
@@ -223,12 +245,12 @@ sorgenti = [ { tipo = "webeep", url = "u" }, { tipo = "webpage-url", url = "http
 
 def test_archivio_source_writes_link_file_and_reuses_txt_path(settings, course_with_links, monkeypatch):
     from sbob.auth import recman
-    c, calls = course_with_links, []
+    c = course_with_links
     c.sorgenti = [{"tipo": "archivio", "url": "https://aunicalogin.polimi.it/aunicalogin/getservizio.xml?id_servizio=2294&c_classe_webeep=1-STD"}]
     rows = [{"webex": f"https://politecnicomilano.webex.com/recordingservice/sites/x/recording/{ID1}/playback",
              "data": "08/05/2026 10:33", "forma": "Laboratorio", "argomento": "Lab 3"}]
     monkeypatch.setattr(recman, "collect", lambda entry, headless=True, log=None: rows)
-    monkeypatch.setattr(download, "_run_prd", _fake_prd({"2026-05-10 01-45": ID1}, calls))
+    FakeWebex(monkeypatch, {ID1: "2026-05-10 01:45:00"})
     rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
     assert rep.done == ["2026-05-08_prova_lab01"]                       # data e tipo dall'archivio
     text = (c.cartella / "link_archivio.txt").read_text()

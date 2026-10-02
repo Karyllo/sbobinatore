@@ -536,8 +536,8 @@ def notebook(corso: str, azione: Annotated[Optional[str], typer.Argument(help="a
 
 @app.command()
 def doctor(as_json: JsonOpt = False,
-           veloce: Annotated[bool, typer.Option("--veloce", help="Non avvia il downloader (salta l'installazione).")] = False):
-    """Controlla che ci sia tutto (programmi, chiavi, librerie, downloader) e dice come sistemare ciò che manca."""
+           veloce: Annotated[bool, typer.Option("--veloce", help="Salta i controlli lenti.")] = False):
+    """Controlla che ci sia tutto (programmi, chiavi, librerie, accessi) e dice come sistemare ciò che manca."""
     from sbob.core.doctor import run_checks
 
     checks = run_checks(_settings(), quick=veloce)
@@ -639,9 +639,9 @@ def archivio_cmd(corso: str,
 
 
 @app.command()
-def cookie(nome: Annotated[str, typer.Argument(help="ticket | MoodleSession | SSL_JSESSIONID")],
+def cookie(nome: Annotated[str, typer.Argument(help="ticket | MoodleSession")],
            valore: str):
-    """Salva un cookie per il downloader (inoltra a `prd set-cookie`)."""
+    """Riserva manuale a `sbob login`: salva un cookie (file leggibile solo da te)."""
     from sbob.steps.download import set_cookie
 
     set_cookie(_settings(), nome, valore)

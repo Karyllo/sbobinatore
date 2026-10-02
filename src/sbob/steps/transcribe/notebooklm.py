@@ -7,7 +7,7 @@ Vincoli rispettati: max 10 sorgenti in volo, timeout 12 min per sorgente, max 3 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sbob import notebooklm_cli
 from sbob.core.batch import Job

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 import sys
-from typing import Any
 
 from sbob.config import Settings
 from sbob.core import archivio as ar

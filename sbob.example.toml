@@ -2,9 +2,6 @@
 
 root = "~/Università"                         # le cartelle relative dei corsi partono da qui
 lingua = "it"
-# Downloader delle registrazioni. Default: installato da uv dal fork (nessun clone manuale).
-# Per sviluppo: la cartella di un clone (con o senza .venv).
-# downloader = "git+https://github.com/Karyllo/polimi_recordings_downloader@local-fixes"
 
 [audio]
 bitrate = "32k"

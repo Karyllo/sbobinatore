@@ -19,7 +19,6 @@ import re
 import secrets
 from collections.abc import Callable
 from contextlib import contextmanager
-from pathlib import Path
 
 from sbob.config import CONFIG_HOME
 from sbob.core.report import NeedsHuman
@@ -167,6 +166,19 @@ def _webex_ticket(ctx, page, headless: bool, email: str | None, timeout_s: int,
     return ticket
 
 
+def _webeep_email() -> str | None:
+    """Email istituzionale dal profilo WeBeep (serve a Webex per l'accesso). Solo in memoria: non si salva né si stampa."""
+    try:
+        from sbob.webeep.client import WebeepClient
+
+        client = WebeepClient(load_token() or "")
+        users = client.call("core_user_get_users_by_field", field="id", **{"values[0]": client.site_info()["userid"]})
+        email = (users[0] or {}).get("email") if users else None
+        return email if email and email.endswith("polimi.it") else None
+    except Exception:  # noqa: BLE001 — token assente o API cambiata: si chiede all'utente come prima
+        return None
+
+
 def login(settings, headless: bool = False, timeout_s: int = 600,
           log: Callable[[str], None] = print) -> dict[str, bool]:
     """Esegue (o rinnova, con headless=True) l'accesso e salva token e cookie. Restituisce cosa è stato ottenuto."""
@@ -180,7 +192,7 @@ def login(settings, headless: bool = False, timeout_s: int = 600,
         if ms := _cookie(ctx, WEBEEP, "MoodleSession"):
             set_cookie(settings, "MoodleSession", ms)
             got["MoodleSession"] = True
-        email = (settings.raw.get("login", {}) or {}).get("email")
+        email = (settings.raw.get("login", {}) or {}).get("email") or _webeep_email()
         if ticket := _webex_ticket(ctx, page, headless, email, timeout_s, log):
             set_cookie(settings, "ticket", ticket)
             got["ticket"] = True
