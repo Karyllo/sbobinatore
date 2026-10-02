@@ -1,0 +1,77 @@
+# Copia in ~/.config/sbob/sbob.toml (o ./sbob.toml, o $SBOB_CONFIG) e metti le chiavi in .env accanto.
+
+root = "~/Desktop/Karyl/università"           # le cartelle relative dei corsi partono da qui
+lingua = "it"
+downloader = "~/polimi_recordings_downloader"  # clone con il suo .venv (prd)
+
+[audio]
+bitrate = "32k"
+
+# ---------------------------------------------------------------- modelli per ruolo
+# Ogni ruolo sceglie provider e modello in modo indipendente. Si possono sovrascrivere da CLI
+# (es. `sbob appunti elettronica --notes anthropic:claude-sonnet-5-5`).
+# prezzi in USD per milione di token (facoltativi: servono solo per il riepilogo costi).
+
+[modelli.trascrizione]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+rpm = 10
+
+[modelli.refiner]
+provider = "deepseek"
+model = "deepseek-v4-flash"
+rpm = 200
+temperature = 0.1
+max_tokens = 8192
+# prezzi = { input = 0.0, output = 0.0 }
+
+[modelli.notes]
+provider = "gemini"
+model = "gemini-3.5-flash"
+rpm = 10
+temperature = 0.3
+top_p = 0.95
+max_tokens = 65536
+thinking = true
+# Quando Gemini (gratuito: ~20 richieste/giorno) esaurisce la quota, i blocchi rimanenti vanno qui:
+riserva = { provider = "deepseek", model = "deepseek-v4-pro", rpm = 200, thinking = false, workers = 8 }
+
+[modelli.pdf]
+provider = "gemini"            # Gemini legge il PDF nativamente (layout, formule, figure)
+model = "gemini-3.8-flash"
+rpm = 10
+pagine_per_blocco = 8          # pagine per chiamata; un blocco fallito viene ritentato pagina per pagina
+# pdf_modo = "immagini"        # forzato: pagine come PNG (automatico per provider OpenAI-compatibili, es. Qwen-VL)
+# Alternativa con Qwen (visione) — verifica nome modello e endpoint sul tuo account DashScope:
+#   provider = "qwen"
+#   model = "qwen-vl-max"
+# NB: l'API DeepSeek è solo testo: non può leggere PDF.
+
+# ---------------------------------------------------------------- provider
+# I default (gemini, deepseek, openai, anthropic) sono già definiti; qui si aggiungono o modificano.
+# chiavi = prefisso env: legge PREFISSO_ACCOUNT1..N e PREFISSO.
+# [providers.qwen]
+# tipo = "openai"
+# base_url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+# chiavi = "DASHSCOPE_API_KEY"
+#
+# [providers.openrouter]
+# tipo = "openai"
+# base_url = "https://openrouter.ai/api/v1"
+# chiavi = "OPENROUTER_API_KEY"
+
+# ---------------------------------------------------------------- corsi
+[corsi.elettronica]
+nome = "Elettronica"
+anno_accademico = "2025-26"
+cartella = "3 anno /1 semestre/elettronica"     # relativa a root (attenzione agli spazi finali)
+sorgente = { tipo = "txt", file = "link.txt" }  # file relativo alla cartella del corso
+trascrizione = "gemini"                         # gemini | notebooklm
+notebook = "Sbobine Elettronica"                # solo per trascrizione = notebooklm
+inizio_corso = "2025-09-15"
+
+# [corsi.real_analysis]
+# nome = "Real and Functional Analysis"
+# anno_accademico = "2025-26"
+# cartella = "4 anno /1 semestre/Real and Functional Analysis"
+# sorgente = { tipo = "webeep", url = "https://webeep.polimi.it/course/view.php?id=..." }
