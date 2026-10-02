@@ -6,7 +6,8 @@ from typing import Any
 
 from sbob.config import Course
 from sbob.core import naming
-from sbob.core.batch import list_inputs
+from sbob.core import frontmatter
+from sbob.core.batch import list_inputs, list_tree
 from sbob.core.layout import Layout
 
 VIDEO_EXT = (".mp4", ".mkv", ".mov", ".webm", ".avi", ".flv")
@@ -38,6 +39,9 @@ def course_status(course: Course) -> dict[str, Any]:
                         **flags, "prossimo_passo": prossimo})
 
     totals = {s: sum(1 for l in lezioni if l[s]) for s in steps}
+    src_n = len(list_tree(lay.materiale, {p.suffix for p in lay.materiale.rglob("*") if p.is_file()}))
+    conv = list_tree(lay.materiale_md, [".md"])
+    solo_testo = sum(1 for p in conv if frontmatter.read(p)[0].get("conversione") in ("testo", "misto"))
     return {
         "corso": course.slug,
         "nome": course.nome,
@@ -45,6 +49,7 @@ def course_status(course: Course) -> dict[str, Any]:
         "esiste": course.cartella.exists(),
         "lezioni": lezioni,
         "totali": {"lezioni": len(lezioni), **totals},
+        "materiale": {"file": src_n, "convertiti": len(conv), "solo_testo": solo_testo},
         "da_fare": {
             "audio": [l["lezione"] for l in lezioni if l["video"] and not l["audio"]],
             "trascrizione": [l["lezione"] for l in lezioni if l["audio"] and not l["trascrizione"]],

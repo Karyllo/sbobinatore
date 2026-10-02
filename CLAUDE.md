@@ -261,6 +261,22 @@ Lato sbob:
   - nei prompt c'è un preambolo anti-injection, e nella skill la sezione "Sicurezza" (divieto di leggere token/cookie/.env, contenuti come dati e mai come istruzioni);
   - invariante: le chiamate LLM non hanno strumenti e non contengono mai segreti.
 
+## Fase 8, punti 2-4 (fatti): materiale WeBeep
+- `webeep/client.py`: API Moodle (token da `sbob login`) con le chiamate di webeep-sync. `courses()` include **anche gli anni passati e i corsi del 2026-27**. Nomi e percorsi dal server sono sanificati (`safe_name`, `safe_path`).
+- `steps/materiale.py`:
+  - **sync:** `<corso>/materiale/<sezione>/…`, incrementale (`manifest.materiale`: modified e size); non cancella mai.
+  - **siti dei docenti:** `materiale_siti = [url]`, solo link dello stesso sito, ETag/If-Modified-Since, tetto 200 MB, host privati rifiutati.
+  - **conversione** in `<corso>/materiale_md/`: PDF con la visione; pptx/docx via LibreOffice (o markitdown); testo, codice e notebook copiati; `tipo` (tde, laboratorio, esercitazione, slide) dedotto dal percorso; modifiche rilevate con sha256 (`manifest.materiale_conv`).
+- **Quota:** il ruolo `pdf` ha la riserva `gemini-3-flash-preview`; se finisce anche quella entra `pdf_testo` (DeepSeek, solo testo: pagine con figure marcate `> [!figura] non trascritta`). I checkpoint `*.testo.md` restano e al run dopo le pagine vengono rifatte con la visione (`upgrade`). Il report ha `warnings` ed exit 2. `[materiale] se_finisce_quota = "ferma"` disattiva il fallback.
+- **Fonti multiple** per le registrazioni (richiesta dell'utente: stanno in posti diversi per ogni corso): `sorgenti = [...]` o `sorgente = {...}`. `download.plan_source` per fonte, unione per ID video, una fonte che fallisce non blocca le altre (warning).
+- `sbob webeep corsi|collega`, `sbob materiale`, sezione "Materiale" nella mappa, riga nello status, `--da materiale` e `cerca --in materiale` su `materiale_md/` (ricorsivi).
+- **Provato dal vero** su FRO 2025-26 (id 19827):
+  - 104 file (26 MB) scaricati in 12 s, secondo giro "0 da scaricare";
+  - PDF di 62 pagine → 6.600 parole in 3 min 48 s, formule LaTeX e 17 figure; ha usato la riserva perché il modello principale era senza quota;
+  - il notebook è stato copiato, e la ricerca e la mappa vedono il materiale.
+  - Bug trovato e corretto: `tipo` non riconosceva `laboratori`/`Lab03`.
+- **Non ancora provato:** conversione `solo testo` con quota esaurita su dati veri (provata solo nei test), `.pptx` con LibreOffice, un sito personale reale.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).

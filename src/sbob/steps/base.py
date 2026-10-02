@@ -53,7 +53,7 @@ class StepContext:
 StepFn = Callable[[StepContext], StepReport]
 
 # Ordine canonico della catena `sbob run`
-PIPELINE = ("download", "audio", "trascrivi", "appunti", "mappa")
+PIPELINE = ("materiale", "download", "audio", "trascrivi", "appunti", "mappa")
 
 
 def get_step(name: str) -> StepFn:

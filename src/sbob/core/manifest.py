@@ -22,7 +22,7 @@ _lock = Lock()
 class Manifest:
     def __init__(self, path: Path):
         self.path = path
-        self.data: dict[str, Any] = {"version": 1, "videos": {}, "materiale": {}, "meta": {}}
+        self.data: dict[str, Any] = {"version": 1, "videos": {}, "materiale": {}, "materiale_conv": {}, "meta": {}}
         if path.exists():
             loaded = json.loads(path.read_text(encoding="utf-8"))
             for k in self.data:
@@ -35,6 +35,11 @@ class Manifest:
     @property
     def materiale(self) -> dict[str, str]:
         return self.data["materiale"]
+
+    @property
+    def materiale_conv(self) -> dict[str, dict]:
+        """relpath del file in materiale/ → {"sha": sha256 della sorgente, "conv": visione|testo|misto|copia}"""
+        return self.data["materiale_conv"]
 
     def meta(self, stem: str) -> dict[str, Any]:
         return self.data["meta"].setdefault(stem, {})

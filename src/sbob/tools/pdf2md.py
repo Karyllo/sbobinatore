@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -41,6 +42,7 @@ class PdfResult:
     converted: int = 0                  # pagine elaborate in questo run
     resumed: int = 0                    # pagine già coperte dai checkpoint
     failed: dict[int, str] = field(default_factory=dict)   # pagina (1-based) → errore
+    degraded: list[int] = field(default_factory=list)      # pagine (1-based) convertite solo con il testo (niente figure)
     output: Path | None = None          # None se incompleto
 
     @property
@@ -55,16 +57,26 @@ def pdf_mode(role: Role) -> str:
     return "pdf" if role.provider_conf.get("tipo") in NATIVE_PDF_PROVIDERS else "immagini"
 
 
-def _ckpt_name(first: int, last: int) -> str:
-    return f"pagine_{first:05d}-{last:05d}.md"   # 0-based, estremi inclusi
+def _ckpt_name(first: int, last: int, text: bool = False) -> str:
+    return f"pagine_{first:05d}-{last:05d}{'.testo' if text else ''}.md"   # 0-based, estremi inclusi
+
+
+def _ckpt_map(ckpt: Path, text: bool) -> dict[int, Path]:
+    """pagina (0-based) → file di checkpoint che la copre. text=True: solo la modalità 'solo testo'."""
+    out: dict[int, Path] = {}
+    for p in sorted(ckpt.glob("pagine_*.md")):
+        stem = p.stem
+        is_text = stem.endswith(".testo")
+        if is_text != text:
+            continue
+        a, b = stem.removesuffix(".testo").removeprefix("pagine_").split("-")
+        out.update({n: p for n in range(int(a), int(b) + 1)})
+    return out
 
 
 def _covered(ckpt: Path) -> set[int]:
-    pages: set[int] = set()
-    for p in ckpt.glob("pagine_*.md"):
-        a, b = p.stem.removeprefix("pagine_").split("-")
-        pages.update(range(int(a), int(b) + 1))
-    return pages
+    """Pagine già convertite con la VISIONE (quelle in sola modalità testo non contano: si rifanno quando c'è quota)."""
+    return set(_ckpt_map(ckpt, text=False))
 
 
 def _blocks(todo: list[int], size: int) -> list[tuple[int, int]]:
@@ -76,6 +88,21 @@ def _blocks(todo: list[int], size: int) -> list[tuple[int, int]]:
         else:
             out.append((n, n))
     return out
+
+
+def _text_message(pdf: Path, first: int, last: int, lingua: str) -> Message:
+    """Modalità 'solo testo': testo estratto da ogni pagina, con un segnale dove ci sono figure non leggibili."""
+    import pymupdf as fitz
+
+    hint = {"it": "[SEGNALE: la pagina contiene figure o disegni che qui non sono visibili]",
+            "en": "[SIGNAL: the page contains figures or drawings that are not visible here]"}.get(lingua, "")
+    parts = []
+    with fitz.open(pdf) as doc:
+        for n in range(first, last + 1):
+            page = doc.load_page(n)
+            has_fig = bool(page.get_images()) or len(page.get_drawings()) >= 10
+            parts.append(f"=== PAGINA {n + 1} ===\n{page.get_text('text', sort=True)}\n{hint if has_fig else ''}")
+    return Message.user("\n".join(parts))
 
 
 def _message(pdf: Path, first: int, last: int, total: int, mode: str, lingua: str, tmp: Path) -> Message:
@@ -95,14 +122,27 @@ def _message(pdf: Path, first: int, last: int, total: int, mode: str, lingua: st
     return Message.user(*images, TextPart(text))
 
 
+def text_fallback_role(settings, registry):
+    """Ruolo `pdf_testo` per la modalità 'solo testo', o None se disattivata (`[materiale] se_finisce_quota = "ferma"`)
+    o se manca la chiave del suo provider."""
+    if (settings.raw.get("materiale", {}) or {}).get("se_finisce_quota", "testo") == "ferma":
+        return None
+    try:
+        return registry.role("pdf_testo")
+    except NeedsHuman:
+        return None
+
+
 def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: bool = False,
                 checkpoint_dir: Path | None = None, meta: dict | None = None, workers: int | None = None,
-                pages_per_block: int = DEFAULT_PAGES_PER_BLOCK,
-                log: Callable[[str], None] = lambda m: None) -> PdfResult:
+                pages_per_block: int = DEFAULT_PAGES_PER_BLOCK, text_role: Role | None = None,
+                upgrade: bool = False, log: Callable[[str], None] = lambda m: None) -> PdfResult:
+    """`text_role`: se la quota del modello a visione finisce, i blocchi rimasti passano a questo modello (solo testo).
+    `upgrade`: rifà con la visione le pagine che erano state convertite in sola modalità testo."""
     import pymupdf as fitz
 
     res = PdfResult()
-    if out.exists() and not force:
+    if out.exists() and not force and not upgrade:
         res.output = out
         return res
 
@@ -120,6 +160,7 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
     res.resumed = res.pages - len(todo)
     mode, system = pdf_mode(role), prompts.load(lingua, "pdf")
     log(f"{pdf.name}: {res.pages} pagine ({res.resumed} già fatte), {role.label}, modalità {mode}")
+    out_of_quota = threading.Event()
 
     def call(first: int, last: int, tmp: Path):
         """None se ok, altrimenti (ErrorKind, messaggio)."""
@@ -131,10 +172,32 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
             return None
         return r.error_kind, r.error or "errore"
 
+    def text_block(first: int, last: int) -> None:
+        text_done = _ckpt_map(ckpt, text=True)
+        pages = [n for n in range(first, last + 1) if n not in text_done]
+        for a, b in _blocks(pages, pages_per_block):
+            r = text_role.complete([_text_message(pdf, a, b, lingua)], item=f"{pdf.stem}#t{a + 1}-{b + 1}",
+                                   system=prompts.load(lingua, "pdf_testo"),
+                                   validate=lambda t: None if t.strip() else "risposta vuota")
+            if r.ok:
+                atomic_write_text(ckpt / _ckpt_name(a, b, text=True), r.text.strip() + "\n")
+            else:
+                for n in range(a, b + 1):
+                    res.failed[n + 1] = r.error or "errore"
+
     def block(first: int, last: int) -> None:
+        if out_of_quota.is_set():
+            return text_block(first, last)
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
-            err = call(first, last, tmp)
+            try:
+                err = call(first, last, tmp)
+            except NeedsHuman:                     # quota esaurita su tutte le chiavi (riserva compresa)
+                if text_role is None:
+                    raise
+                out_of_quota.set()
+                log(f"{pdf.name}: quota del modello a visione esaurita, passo alla modalità solo testo ({text_role.label})")
+                return text_block(first, last)
             if err is None:
                 return
             kind, msg = err
@@ -154,17 +217,25 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
         try:
             for f in futures:
                 f.result()
-        except NeedsHuman:              # quota esaurita ovunque: i checkpoint restano, si riprende al prossimo run
+        except NeedsHuman:              # quota esaurita ovunque e nessuna modalità di riserva: i checkpoint restano
             for f in futures:
                 f.cancel()
             raise
     res.converted = len(todo) - len(res.failed)
 
-    if set(range(res.pages)) - _covered(ckpt):   # incompleto: niente output, checkpoint intatti
+    visual, text = _ckpt_map(ckpt, text=False), _ckpt_map(ckpt, text=True)
+    if set(range(res.pages)) - set(visual) - set(text):     # incompleto: niente output, checkpoint intatti
         return res
-    parts = sorted(ckpt.glob("pagine_*.md"))
-    body = "\n\n".join(p.read_text(encoding="utf-8").strip() for p in parts) + "\n"
-    atomic_write_text(out, frontmatter.join(meta or {}, body))
-    shutil.rmtree(ckpt, ignore_errors=True)
+    res.degraded = sorted(n + 1 for n in range(res.pages) if n not in visual)   # pagine solo-testo (1-based)
+    files: list[Path] = []
+    for n in range(res.pages):
+        f = visual.get(n) or text[n]
+        if not files or files[-1] != f:
+            files.append(f)
+    body = "\n\n".join(f.read_text(encoding="utf-8").strip() for f in files) + "\n"
+    conversione = "visione" if not res.degraded else ("testo" if len(res.degraded) == res.pages else "misto")
+    atomic_write_text(out, frontmatter.join({**(meta or {}), "conversione": conversione}, body))
+    if not res.degraded:
+        shutil.rmtree(ckpt, ignore_errors=True)           # con pagine solo-testo i checkpoint servono per l'upgrade
     res.output = out
     return res

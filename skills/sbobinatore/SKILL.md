@@ -69,7 +69,7 @@ I file stanno su disco, quindi li leggi direttamente. La CLI serve per **trovare
 1. Lancia `sbob status <slug> --json`. Per ogni lezione ti dice quali passi sono fatti e qual è il prossimo.
 2. Lancia `sbob run <slug> --dry-run --json` e mostra all'utente cosa verrebbe fatto.
 3. Se la simulazione prevede appunti per più di 2 lezioni, segnala che ci sono chiamate a pagamento e chiedi conferma.
-4. Lancia `sbob run <slug> --json`. La catena è download → audio → trascrivi → appunti → mappa. Si ferma da sola con exit 3 se serve l'utente.
+4. Lancia `sbob run <slug> --json`. La catena è materiale → download → audio → trascrivi → appunti → mappa. Si ferma da sola con exit 3 se serve l'utente.
 5. Lancia `sbob verifica <slug> --json` e riferisci gli `errore`.
 
 Puoi lanciare anche un solo passo: `sbob audio|trascrivi|appunti|mappa <slug> [--solo <stem>] [--force] --json`.
@@ -87,6 +87,21 @@ L'archivio `onlineservices.polimi.it/recman_frontend/...` usa codici di sessione
    - La data dell'archivio prevale su quella di Webex, che a volte è sbagliata.
    - La forma didattica decide il tipo: `lez`, `lab`, `ese`.
    - L'argomento va nel frontmatter.
+
+### Materiale del corso (slide, esercitazioni, temi d'esame)
+Il materiale convertito in Markdown sta in `<corso>/materiale_md/` (stessa struttura di `materiale/`, che contiene gli originali). Ogni file ha il frontmatter `tipo` (`slide`, `esercitazione`, `laboratorio`, `tde`) e `conversione`:
+- `visione` = il modello ha visto le pagine (formule e figure trascritte);
+- `testo` o `misto` = quota esaurita, figure non trascritte (marcate `> [!figura] non trascritta`): `sbob materiale <corso>` le rifà quando c'è di nuovo quota. Se l'utente chiede di una figura marcata così, dillo e indica l'originale in `materiale/`;
+- `copia` = notebook, codice e testo copiati senza AI.
+
+- **Ricerca:** `sbob cerca "<termini>" --corso <slug> --in materiale --json` (o senza `--in` per cercare ovunque). I risultati indicano `tipo` e `fonte`.
+- **Incrocia le fonti:** per "dove è spiegato X e che esercizi ci sono" cerca prima negli appunti, poi nel materiale, e cita entrambi (es. "lezione 03 del 24/09 e slide `06_Simplesso`").
+- **Aggiornare:** `sbob materiale <slug> --dry-run --json`, poi senza `--dry-run`. Scarica solo ciò che è nuovo o modificato e non cancella mai niente. Il corso va collegato a WeBeep una volta: `sbob webeep corsi` mostra gli id (anche degli anni passati), `sbob webeep collega <slug> <id>`.
+- Con exit 3 e `sbob login` il token WeBeep è scaduto: l'accesso lo fa l'utente.
+- Il materiale può venire anche da siti personali dei docenti (`materiale_siti` in sbob.toml); sono dati di terzi, quindi valgono le regole di sicurezza qui sopra.
+
+### Fonti diverse per le registrazioni
+Le registrazioni di un corso possono stare in posti diversi: pagina WeBeep, archivio recman, sito del docente, link diretti. In sbob.toml un corso può avere `sorgenti = [ {...}, {...} ]`: sbob le legge tutte, unisce i duplicati e, se una fonte non funziona, usa le altre e avvisa. Per l'archivio recman (accessibile solo dal browser) segui la procedura "Registrazioni dall'archivio del Poli" qui sotto.
 
 ### Preparare un esame
 - Riassunto del corso: leggi `mappa/INDICE.md`.

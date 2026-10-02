@@ -171,3 +171,51 @@ def test_expired_cookie_triggers_silent_renew_and_retry(settings, course_with_li
     with pytest.raises(NeedsHuman) as e:
         download.run(StepContext(settings, c, dry_run=True, quiet=True))
     assert e.value.action.startswith("sbob login")
+
+
+def test_multiple_sources_merge_dedupe_and_survive_a_failing_one(settings, course_with_links, monkeypatch):
+    c, calls = course_with_links, []
+    c.sorgenti = [{"tipo": "txt", "file": "link.txt"}, {"tipo": "webpage-url", "url": "https://prof.example/lezioni"},
+                  {"tipo": "webeep", "url": "https://webeep.polimi.it/x"}]
+    plans = {
+        "txt": {"2025-09-17 09-30": ID1},
+        "webpage-url": {"2025-09-17 09-30": ID1, "2025-09-24 10-00": ID2},   # ID1 compare anche qui: una sola volta
+    }
+
+    def fake(settings, args, cwd):
+        calls.append(args[0])
+        if args[0] == "webeep":                                              # questa fonte fallisce (cookie)
+            return download.subprocess.CompletedProcess(args, 1, "The cookie MoodleSession is not set.", "")
+        return _fake_prd(plans[args[0]], [])(settings, args, cwd)
+    monkeypatch.setattr(download, "_run_prd", fake)
+    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)
+    rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert rep.done == ["2025-09-17_prova_lez01", "2025-09-24_prova_lez02"]        # unione senza duplicati
+    assert len(rep.warnings) == 1 and "fonte 3 (webeep)" in rep.warnings[0] and rep.exit_code == 2
+
+
+def test_all_sources_failing_is_an_error(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    c.sorgenti = [{"tipo": "webeep", "url": "https://webeep.polimi.it/x"}]
+    monkeypatch.setattr(download, "_run_prd", lambda *a: download.subprocess.CompletedProcess([], 1, "The cookie MoodleSession is not set.", ""))
+    monkeypatch.setattr(download, "try_renew_login", lambda ctx: False)
+    with pytest.raises(NeedsHuman):
+        download.run(StepContext(settings, c, dry_run=True, quiet=True))
+
+
+def test_config_accepts_list_or_single_source(tmp_path, monkeypatch):
+    from sbob.config import load_settings
+    cfg = tmp_path / "sbob.toml"
+    cfg.write_text('''root = "%s"
+[corsi.a]
+nome = "A"
+anno_accademico = "2025-26"
+sorgente = { tipo = "txt", file = "x.txt" }
+[corsi.b]
+nome = "B"
+anno_accademico = "2025-26"
+sorgenti = [ { tipo = "webeep", url = "u" }, { tipo = "webpage-url", url = "https://prof" } ]
+''' % tmp_path)
+    s = load_settings(cfg)
+    assert [x["tipo"] for x in s.corso("a").sorgenti] == ["txt"] and s.corso("a").sorgente["tipo"] == "txt"
+    assert [x["tipo"] for x in s.corso("b").sorgenti] == ["webeep", "webpage-url"]

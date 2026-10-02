@@ -118,7 +118,7 @@ def check_downloader(settings: Settings, quick: bool = False) -> list[dict]:
                       "presente (la scadenza si scopre solo al download)" if "ticket" in cookies else "non impostato",
                       "copia il cookie 'ticket' da politecnicomilano.webex.com e lancia: sbob cookie ticket <valore>",
                       opzionale=True))
-    if any(c.sorgente.get("tipo") == "webeep" for c in settings.corsi.values()):
+    if any(s.get("tipo") == "webeep" for c in settings.corsi.values() for s in c.sorgenti):
         out.append(_check("cookie MoodleSession", "MoodleSession" in cookies, "serve alla sorgente webeep",
                           "sbob cookie MoodleSession <valore> (da webeep.polimi.it)", opzionale=True))
     return out
@@ -159,6 +159,12 @@ def check_login() -> list[dict]:
 
 def check_optional(settings: Settings) -> list[dict]:
     out = []
+    if any(c.webeep_id or c.extra.get("materiale_siti") for c in settings.corsi.values()):
+        has_office = bool(shutil.which("soffice") or shutil.which("libreoffice"))
+        out.append(_check("LibreOffice", has_office or _has("markitdown"),
+                          "per convertire PowerPoint/Word (con figure)" if has_office else
+                          "assente: i .pptx/.docx si convertono solo come testo, se c'è markitdown",
+                          "brew install --cask libreoffice", opzionale=True))
     if any(c.trascrizione == "notebooklm" for c in settings.corsi.values()):
         out.append(_check("notebooklm", bool(shutil.which("notebooklm")), "CLI per il backend notebooklm",
                           "uv tool install notebooklm-py && notebooklm login", opzionale=True))

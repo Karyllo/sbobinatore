@@ -55,7 +55,7 @@ Più account Google aggiungono quota: nel file `~/.config/sbob/.env` metti `GOOG
 sbob                          # menu guidato
 sbob status <corso>           # cosa è fatto e cosa manca, lezione per lezione
 sbob run <corso> --dry-run    # mostra cosa farebbe la catena completa
-sbob run <corso>              # download → audio → trascrivi → appunti → mappa
+sbob run <corso>              # materiale → download → audio → trascrivi → appunti → mappa
 sbob cerca "matrice di copertura" --corso <corso>
 sbob verifica <corso>         # contenuto perso, trascrizioni troncate, numerazione
 sbob pdf slide.pdf --corso <corso>
@@ -84,9 +84,23 @@ Quando i cookie scadono, sbob li rinnova da solo senza finestra (`sbob login --r
 ### Registrazioni
 - **Link delle registrazioni:** vanno messi in `link.txt` nella cartella del corso, uno per riga. L'archivio registrazioni del Poli usa link di sessione che funzionano solo nel browser. Con Claude Code e l'estensione Claude in Chrome puoi chiedere "scarica le registrazioni di \<corso\>": la skill raccoglie i link dal tuo browser, insieme a data, tipo (lezione, esercitazione, laboratorio) e argomento.
 
+### Materiale e fonti diverse
+Il materiale del corso (slide, esercitazioni, temi d'esame) si scarica da WeBeep e si converte in Markdown, con formule in LaTeX e figure trascritte:
+```bash
+sbob webeep corsi                       # i tuoi corsi WeBeep, anche degli anni passati, con gli id
+sbob webeep collega <corso> <id>        # lo fai una volta per corso
+sbob materiale <corso>                  # scarica il nuovo e converte
+```
+- Si riscarica e si riconverte solo ciò che è nuovo o modificato, e non si cancella mai niente.
+- Se la quota di Gemini finisce, la conversione prosegue con un altro modello solo sul testo, ti avvisa e rifà quelle pagine al prossimo giro.
+- Anche i siti personali dei docenti: `materiale_siti = ["https://…"]` nel corso.
+- Per le registrazioni un corso può avere più fonti insieme: `sorgenti = [ { tipo = "webeep", url = "…" }, { tipo = "webpage-url", url = "https://sito-del-docente" } ]`. sbob le legge tutte, unisce i duplicati e, se una non funziona, usa le altre.
+
 ### Struttura di un corso
 ```
 <corso>/
+  materiale/      ← file scaricati (originali)
+  materiale_md/   ← gli stessi convertiti in Markdown
   video/  audio/  trascrizioni/  appunti/  merge/
   mappa/          ← riassunti, concetti e indice, per la navigazione
   .sbob/          ← stato interno (cache, costi): non toccare

@@ -49,6 +49,7 @@ class StepReport:
     action: str | None = None
     error: str | None = None
     notes: list[str] = field(default_factory=list)     # messaggi informativi
+    warnings: list[str] = field(default_factory=list)  # qualcosa è andato a metà (es. quota esaurita): exit 2
     dry_run: bool = False
 
     def fail(self, item: str, error: Exception | str) -> None:
@@ -60,6 +61,8 @@ class StepReport:
             return Exit.HUMAN
         if self.error:
             return Exit.ERROR
+        if self.warnings and not self.failed:
+            return Exit.PARTIAL
         if self.failed:
             return Exit.PARTIAL if self.done or self.skipped else Exit.ERROR
         return Exit.OK

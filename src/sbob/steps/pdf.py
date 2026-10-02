@@ -1,6 +1,6 @@
 """Passo pdf: PDF → Markdown (tools/pdf2md). Opzioni: path (file o cartella), out (cartella di destinazione).
 
-Con un corso la destinazione di default è <corso>/.sbob/md (da lì lo legge `sbob merge --da materiale`);
+Con un corso la destinazione di default è <corso>/materiale_md (da lì lo leggono ricerca e `sbob merge --da materiale`);
 senza corso, ./markdown_output.
 """
 
@@ -20,7 +20,7 @@ from sbob.tools.pdf2md import DEFAULT_PAGES_PER_BLOCK, convert_pdf
 def run(ctx: StepContext) -> StepReport:
     rep = ctx.report("pdf")
     target = Path(ctx.options["path"]).expanduser()
-    out_dir = Path(ctx.options["out"]).expanduser() if ctx.options.get("out") else ctx.layout.state / "md"
+    out_dir = Path(ctx.options["out"]).expanduser() if ctx.options.get("out") else ctx.layout.materiale_md
     pdfs = list_inputs(target, [".pdf"]) if target.is_dir() else [target]
     pdfs = [p for p in pdfs if p.is_file() and (not ctx.only or p.stem in ctx.only)]
     if not pdfs:

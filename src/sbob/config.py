@@ -44,11 +44,13 @@ class Course:
     anno_accademico: str            # "2025-26"
     cartella: Path                  # assoluta, già risolta contro root
     lingua: str = "it"
-    sorgente: dict[str, Any] = field(default_factory=dict)
+    sorgente: dict[str, Any] = field(default_factory=dict)       # la prima fonte (compatibilità)
+    sorgenti: list[dict[str, Any]] = field(default_factory=list) # tutte le fonti delle registrazioni
     trascrizione: str = "gemini"
     notebook: str | None = None     # nome taccuino NotebookLM (backend notebooklm)
     materiale: Path | None = None   # cartella webeep-sync, se diversa da <cartella>/materiale
     inizio_corso: str | None = None # "YYYY-MM-DD", per calcolare la settimana nel merge
+    webeep_id: int | None = None    # id del corso su WeBeep (sbob webeep collega): abilita il passo `materiale`
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -88,7 +90,12 @@ DEFAULT_MODELLI: dict[str, dict[str, Any]] = {
                 "temperature": 0.1, "max_tokens": 8192, "tentativi": 3},
     "notes": {"provider": "gemini", "model": "gemini-3.5-flash", "rpm": 10,
               "temperature": 0.3, "top_p": 0.95, "max_tokens": 65536, "thinking": True},
-    "pdf": {"provider": "gemini", "model": "gemini-3.8-flash", "rpm": 10},
+    "pdf": {"provider": "gemini", "model": "gemini-3.8-flash", "rpm": 10,
+            # stessa chiave, altro modello = quota separata: prima riserva quando finisce quella principale
+            "riserva": {"provider": "gemini", "model": "gemini-3-flash-preview", "rpm": 10}},
+    # solo testo (niente visione): usato dal passo materiale quando anche la riserva è senza quota
+    "pdf_testo": {"provider": "deepseek", "model": "deepseek-v4-flash", "rpm": 200, "temperature": 0.1,
+                  "max_tokens": 8192, "thinking": False, "workers": 6},
     "mappa": {"provider": "gemini", "model": "gemini-3.1-flash-lite", "rpm": 30, "temperature": 0.2,
               "max_tokens": 4096},
 }
@@ -122,16 +129,21 @@ def _parse_course(slug: str, data: dict[str, Any], root: Path, lingua: str) -> C
     if not cartella_path.is_absolute():
         cartella_path = root / cartella_path
 
-    sorgente = dict(data.get("sorgente", {}))
-    if sorgente and sorgente.get("tipo") not in SOURCE_TYPES:
-        raise ConfigError(f"[corsi.{slug}].sorgente.tipo deve essere uno di {sorted(SOURCE_TYPES)}")
+    # Le registrazioni possono stare in posti diversi (WeBeep, archivio recman, sito del docente, link diretti):
+    # `sorgenti = [ {...}, {...} ]` per più fonti, oppure `sorgente = {...}` per una sola.
+    raw_sources = data.get("sorgenti") or ([data["sorgente"]] if data.get("sorgente") else [])
+    sorgenti = [dict(s) for s in raw_sources]
+    for s in sorgenti:
+        if s.get("tipo") not in SOURCE_TYPES:
+            raise ConfigError(f"[corsi.{slug}] sorgente tipo deve essere uno di {sorted(SOURCE_TYPES)} (trovato: {s.get('tipo')!r})")
+    sorgente = sorgenti[0] if sorgenti else {}
 
     trascrizione = data.get("trascrizione", "gemini")
     if trascrizione not in TRANSCRIBE_BACKENDS:
         raise ConfigError(f"[corsi.{slug}].trascrizione deve essere uno di {sorted(TRANSCRIBE_BACKENDS)}")
 
-    known = {"nome", "anno_accademico", "cartella", "lingua", "sorgente", "trascrizione",
-             "notebook", "materiale", "inizio_corso"}
+    known = {"nome", "anno_accademico", "cartella", "lingua", "sorgente", "sorgenti", "trascrizione",
+             "notebook", "materiale", "inizio_corso", "webeep_id"}
     return Course(
         slug=slug,
         nome=data["nome"],
@@ -139,10 +151,12 @@ def _parse_course(slug: str, data: dict[str, Any], root: Path, lingua: str) -> C
         cartella=cartella_path,
         lingua=data.get("lingua", lingua),
         sorgente=sorgente,
+        sorgenti=sorgenti,
         trascrizione=trascrizione,
         notebook=data.get("notebook"),
         materiale=_expand(data["materiale"]) if data.get("materiale") else None,
         inizio_corso=data.get("inizio_corso"),
+        webeep_id=int(data["webeep_id"]) if data.get("webeep_id") else None,
         extra={k: v for k, v in data.items() if k not in known},
     )
 

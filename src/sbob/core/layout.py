@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sbob.config import Course
 
-STEP_DIRS = ("materiale", "video", "audio", "trascrizioni", "appunti", "merge")
+STEP_DIRS = ("materiale", "materiale_md", "video", "audio", "trascrizioni", "appunti", "merge")
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,11 @@ class Layout:
     @property
     def materiale(self) -> Path:
         return self.materiale_override or self.base / "materiale"
+
+    @property
+    def materiale_md(self) -> Path:
+        """Materiale convertito in Markdown (stessa struttura di materiale/): quello che legge l'agente."""
+        return self.base / "materiale_md"
 
     @property
     def video(self) -> Path:

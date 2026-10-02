@@ -64,6 +64,8 @@ def _print_report(r: StepReport) -> None:
         err.print(f"  [red]✗[/red] {f.item}: {f.error}")
     for n in r.notes:
         err.print(f"  [dim]{n}[/dim]")
+    for w in r.warnings:
+        err.print(f"  [yellow]⚠ {w}[/yellow]")
     if r.cost.get("usd_totale"):
         err.print(f"  costo stimato: ${r.cost['usd_totale']:.4f}")
     if r.needs_human:
@@ -103,7 +105,7 @@ def corsi(as_json: JsonOpt = False):
     s = _settings()
     rows = [{"slug": c.slug, "nome": c.nome, "anno": c.anno_accademico, "cartella": str(c.cartella),
              "esiste": c.cartella.exists(), "trascrizione": c.trascrizione,
-             "sorgente": c.sorgente.get("tipo")} for c in s.corsi.values()]
+             "sorgente": ", ".join(s["tipo"] for s in c.sorgenti) or None} for c in s.corsi.values()]
     if as_json:
         sys.stdout.write(json.dumps({"config": str(s.path) if s.path else None, "root": str(s.root),
                                      "corsi": rows}, ensure_ascii=False, indent=2) + "\n")
@@ -135,8 +137,11 @@ def status(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso (
         return
     for d in data:
         tot = d["totali"]
+        mat = d["materiale"]
         out.print(f"[bold]{d['nome']}[/bold] ({d['corso']}) — {tot['lezioni']} lezioni · "
-                  f"video {tot['video']} · audio {tot['audio']} · trascr. {tot['trascrizione']} · appunti {tot['appunti']}")
+                  f"video {tot['video']} · audio {tot['audio']} · trascr. {tot['trascrizione']} · appunti {tot['appunti']}"
+                  + (f" · materiale {mat['convertiti']}/{mat['file']}"
+                     + (f" ({mat['solo_testo']} solo testo)" if mat["solo_testo"] else "") if mat["file"] else ""))
         t = Table("lezione", "video", "audio", "trascr.", "appunti", "prossimo")
         tick = lambda b: "[green]✓[/green]" if b else "·"  # noqa: E731
         for l in d["lezioni"]:
@@ -191,6 +196,58 @@ def merge(corso: str, as_json: JsonOpt = False,
           da: Annotated[str, typer.Option(help="appunti|trascrizioni|materiale")] = "appunti"):
     """Unisce i file del corso in merge/ (per NotebookLM o un LLM)."""
     _emit([_run_step("merge", corso, quiet=as_json, options={"modo": modo, "da": da})], as_json)
+
+
+@app.command()
+def materiale(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
+              as_json: JsonOpt = False,
+              modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per la conversione dei PDF")] = None):
+    """Scarica il materiale da WeBeep (nuovo o modificato) e lo converte in Markdown in <corso>/materiale_md/."""
+    _emit([_run_step("materiale", corso, force=force, dry_run=dry_run, only=only, quiet=as_json,
+                     options={"modello": modello})], as_json)
+
+
+webeep_app = typer.Typer(help="Corsi e materiale su WeBeep (serve `sbob login`).", no_args_is_help=True)
+app.add_typer(webeep_app, name="webeep")
+
+
+@webeep_app.command("corsi")
+def webeep_corsi(as_json: JsonOpt = False):
+    """Elenca i corsi WeBeep (anche degli anni passati) e quali sono già collegati a un corso di sbob."""
+    from sbob.auth.browser import load_token
+    from sbob.webeep.client import WebeepClient
+
+    s = _settings()
+    try:
+        courses = WebeepClient(load_token() or "").courses()
+    except NeedsHuman as e:
+        _emit([StepReport(step="webeep", needs_human=str(e), action=e.action)], as_json)
+        return
+    linked = {c.webeep_id: slug for slug, c in s.corsi.items() if c.webeep_id}
+    for c in courses:
+        c["collegato_a"] = linked.get(c["id"])
+    if as_json:
+        sys.stdout.write(json.dumps({"corsi": courses}, ensure_ascii=False, indent=2) + "\n")
+        return
+    t = Table("id", "anno", "corso", "collegato a")
+    for c in courses:
+        t.add_row(str(c["id"]), c["anno"] or "", c["nome"][:70], c["collegato_a"] or "")
+    out.print(t)
+
+
+@webeep_app.command("collega")
+def webeep_collega(corso: str, webeep_id: int):
+    """Collega un corso di sbob a un corso WeBeep (scrive webeep_id in sbob.toml)."""
+    from sbob.setup import set_course_field
+
+    s = _settings()
+    try:
+        s.corso(corso)
+        set_course_field(s.path, corso, "webeep_id", webeep_id)
+    except (ConfigError, ValueError) as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(Exit.ERROR)
+    err.print(f"[green]{corso} ↔ WeBeep {webeep_id}.[/green] Ora: sbob materiale {corso} --dry-run")
 
 
 @app.command()
@@ -275,7 +332,7 @@ def verifica(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso
 @app.command()
 def pdf(path: Annotated[str, typer.Argument(help="File .pdf o cartella di PDF.")],
         corso: Annotated[Optional[str], typer.Option("--corso", help="Corso: l'output va in <corso>/.sbob/md.")] = None,
-        out: Annotated[Optional[str], typer.Option("--out", help="Cartella di destinazione (default ./markdown_output senza corso).")] = None,
+        out: Annotated[Optional[str], typer.Option("--out", help="Cartella di destinazione (default: <corso>/materiale_md, o ./markdown_output senza corso).")] = None,
         force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
         modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per il ruolo pdf")] = None):
     """Converte PDF in Markdown con un modello multimodale (formule in LaTeX, immagini descritte)."""
@@ -309,7 +366,7 @@ def pdf(path: Annotated[str, typer.Argument(help="File .pdf o cartella di PDF.")
 def run(corso: str, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
         da: Annotated[str, typer.Option("--da", help="Primo passo.")] = PIPELINE[0],
         fino_a: Annotated[str, typer.Option("--fino-a", help="Ultimo passo.")] = PIPELINE[-1]):
-    """Esegue la catena download → audio → trascrivi → appunti → mappa. Si ferma se un passo richiede l'utente."""
+    """Esegue la catena materiale → download → audio → trascrivi → appunti → mappa. Si ferma se un passo richiede l'utente."""
     try:
         steps = PIPELINE[PIPELINE.index(da): PIPELINE.index(fino_a) + 1]
     except ValueError:

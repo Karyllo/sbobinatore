@@ -21,7 +21,7 @@ from typing import Any
 
 from sbob.config import Course, Settings
 from sbob.core import frontmatter, naming
-from sbob.core.batch import atomic_write_text, list_inputs
+from sbob.core.batch import atomic_write_text, list_inputs, list_tree
 from sbob.core.layout import Layout
 
 SHORT = {"lez": "Lezione", "ese": "Esercitazione", "lab": "Laboratorio", "sem": "Seminario", "tde": "Tema d'esame"}
@@ -94,6 +94,20 @@ def _lesson_link(l: dict, start: Path) -> str:
     return link(label, Path(target), start) if target else label
 
 
+def _materiale(course: Course) -> list[dict[str, Any]]:
+    """File convertiti in materiale_md/, con tipo e modalità di conversione dal frontmatter."""
+    lay = Layout.of(course)
+    out = []
+    for p in list_tree(lay.materiale_md, [".md"]):
+        meta = frontmatter.read(p)[0]
+        rel = p.relative_to(lay.materiale_md)
+        orig = lay.materiale / rel.with_suffix("") if rel.suffix == ".md" else None
+        out.append({"file": str(p), "originale": str(orig) if orig and orig.exists() else None,
+                    "sezione": rel.parts[0] if len(rel.parts) > 1 else "", "nome": rel.with_suffix("").name,
+                    "tipo": meta.get("tipo", "slide"), "conversione": meta.get("conversione")})
+    return out
+
+
 def render_course(course: Course) -> dict[str, Any]:
     lay = Layout.of(course)
     mappa, cdir = lay.mappa, lay.mappa / "concetti"
@@ -121,6 +135,22 @@ def render_course(course: Course) -> dict[str, Any]:
         if files:
             lines += ["", "File: " + " · ".join(files)]
         lines.append("")
+    materiale = _materiale(course)
+    if materiale:
+        solo_testo = sum(1 for m in materiale if m["conversione"] in ("testo", "misto"))
+        lines += ["## Materiale", "", f"{len(materiale)} file convertiti in Markdown"
+                  + (f" · {solo_testo} in modalità solo testo (figure non trascritte: si rifanno con `sbob materiale {course.slug}`)"
+                     if solo_testo else ""), ""]
+        by_section: dict[str, list[dict]] = {}
+        for m in materiale:
+            by_section.setdefault(m["sezione"] or "Generale", []).append(m)
+        for sez in sorted(by_section):
+            lines.append(f"### {sez}")
+            for m in by_section[sez]:
+                orig = f" · {link('originale', Path(m['originale']), mappa)}" if m["originale"] else ""
+                flag = " *(solo testo)*" if m["conversione"] in ("testo", "misto") else ""
+                lines.append(f"- {link(m['nome'], Path(m['file']), mappa)} — {m['tipo']}{flag}{orig}")
+            lines.append("")
     if concepts:
         lines += ["## Concetti del corso", ""]
         for name in sorted(concepts, key=str.casefold):
@@ -142,6 +172,7 @@ def render_course(course: Course) -> dict[str, Any]:
 
     return {"slug": course.slug, "nome": course.nome, "anno": course.anno_accademico,
             "cartella": str(course.cartella), "indice": str(mappa / "INDICE.md"), "lezioni": lessons,
+            "materiale": materiale,
             "concetti": sorted(concepts, key=str.casefold)}
 
 

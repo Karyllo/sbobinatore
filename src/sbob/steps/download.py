@@ -94,8 +94,8 @@ def read_links_file(path: Path) -> tuple[list[str], dict[str, dict]]:
     return links, meta
 
 
-def _source_args(course: Course, options: dict, course_dir: Path, staging: Path | None = None) -> tuple[list[str], dict]:
-    src = course.sorgente
+def _source_args(course: Course, src: dict, options: dict, course_dir: Path, staging: Path | None = None,
+                 idx: int = 0) -> tuple[list[str], dict]:
     tipo = src.get("tipo")
     if not tipo:
         raise NeedsHuman(f"Il corso '{course.slug}' non ha una sorgente", action=f"aggiungi sorgente in [corsi.{course.slug}]")
@@ -107,7 +107,7 @@ def _source_args(course: Course, options: dict, course_dir: Path, staging: Path 
             raise NeedsHuman(f"File link non trovato: {file}", action=f"crea {file} con un link Webex per riga")
         if tipo == "txt" and staging is not None:
             links, meta = read_links_file(file)      # a prd vanno solo i link; i metadati li usa sbob
-            clean = staging / "links.txt"
+            clean = staging / f"links{idx}.txt"
             atomic_write_text(clean, "\n".join(links) + "\n")
             return [tipo, str(clean), *common], meta
         return [tipo, str(file), *common], {}
@@ -164,6 +164,31 @@ def try_renew_login(ctx: StepContext) -> bool:
     return bool(got.get("ticket"))
 
 
+def plan_source(ctx: StepContext, src: dict, idx: int) -> dict[str, dict]:
+    """Elenco delle registrazioni di UNA fonte (nessun download), con i metadati del file di link se presenti."""
+    lay, course = ctx.layout, ctx.course
+    plan_dir = lay.staging / f"plan{idx}"
+    shutil.rmtree(plan_dir, ignore_errors=True)
+    args, link_meta = _source_args(course, src, ctx.options, course.cartella, lay.staging, idx)
+    ctx.log(f"download: leggo la fonte {idx + 1} ({src.get('tipo')})…")
+    plan_args = [*args, "--no-aria2c", "--create-xlsx", "--output", str(plan_dir)]
+    try:
+        _check_output(_run_prd(ctx.settings, plan_args, lay.state), src.get("tipo"))
+    except NeedsHuman:
+        # cookie scaduti: se c'è un profilo di `sbob login`, si rinnovano da soli e si riprova una volta
+        if not try_renew_login(ctx):
+            raise
+        shutil.rmtree(plan_dir, ignore_errors=True)
+        _check_output(_run_prd(ctx.settings, plan_args, lay.state), src.get("tipo"))
+    plan = read_plan(plan_dir)
+    for info in plan.values():                   # metadati del file di link (archivio): prevalgono
+        extra = link_meta.get(info["id"].lower(), {})
+        info["tipo"] = extra.get("tipo") or info["tipo"]
+        info["argomento"] = extra.get("argomento") or info["argomento"]
+        info["data"] = extra.get("data")
+    return plan
+
+
 def read_plan(staging_plan: Path) -> dict[str, dict[str, str | None]]:
     """{ 'YYYY-MM-DD HH-MM': {"id", "tipo", "argomento"} } da tutti gli xlsx generati da prd.
     `tipo` è dedotto dalla forma didattica quando la sorgente la fornisce (archivio recman), altrimenti None."""
@@ -208,28 +233,37 @@ def run(ctx: StepContext) -> StepReport:
         return rep
     manifest = ctx.manifest()
 
-    # 1. piano
-    plan_dir = lay.staging / "plan"
-    shutil.rmtree(plan_dir, ignore_errors=True)
-    args, link_meta = _source_args(course, ctx.options, course.cartella, lay.staging)
-    ctx.log("download: leggo l'elenco delle registrazioni…")
-    plan_args = [*args, "--no-aria2c", "--create-xlsx", "--output", str(plan_dir)]
-    try:
-        _check_output(_run_prd(ctx.settings, plan_args, lay.state), course.sorgente.get("tipo"))
-    except NeedsHuman:
-        # cookie scaduti: se c'è un profilo di `sbob login`, si rinnovano da soli e si riprova una volta
-        if not try_renew_login(ctx):
-            raise
-        shutil.rmtree(plan_dir, ignore_errors=True)
-        _check_output(_run_prd(ctx.settings, plan_args, lay.state), course.sorgente.get("tipo"))
-    plan = read_plan(plan_dir)
-    for info in plan.values():                   # metadati del file di link (archivio): prevalgono
-        extra = link_meta.get(info["id"].lower(), {})
-        info["tipo"] = extra.get("tipo") or info["tipo"]
-        info["argomento"] = extra.get("argomento") or info["argomento"]
-        info["data"] = extra.get("data")
+    # 1. piano: ogni fonte produce il suo elenco; si uniscono (stesso video in due posti = una sola registrazione)
+    sources = course.sorgenti
+    if not sources:
+        raise NeedsHuman(f"Il corso '{course.slug}' non ha una fonte di registrazioni",
+                         action=f"aggiungi `sorgente = {{...}}` (o `sorgenti = [...]`) in [corsi.{course.slug}]")
+    plan: dict[str, dict] = {}
+    seen_ids: set[str] = set()
+    problems: list[str] = []
+    first_error: Exception | None = None
+    for idx, src in enumerate(sources):
+        label = f"fonte {idx + 1} ({src.get('tipo')})"
+        try:
+            part = plan_source(ctx, src, idx)
+        except NeedsHuman as e:
+            problems.append(f"{label}: {e}")
+            first_error = first_error or e
+            continue
+        except RuntimeError as e:
+            problems.append(f"{label}: {e}")
+            first_error = first_error or e
+            continue
+        for key, info in part.items():
+            if key in plan or info["id"].lower() in seen_ids:
+                continue                                 # già trovata in un'altra fonte
+            plan[key] = info
+            seen_ids.add(info["id"].lower())
+    if problems and not plan:
+        raise first_error                                # nessuna fonte ha funzionato: errore vero
+    rep.warnings += [f"{p} (le altre fonti sono state lette)" for p in problems]
     if not plan:
-        rep.notes.append("Nessuna registrazione trovata nella sorgente.")
+        rep.notes.append("Nessuna registrazione trovata nelle fonti.")
         return rep
 
     known = set() if ctx.force else set(manifest.videos)

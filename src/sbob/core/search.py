@@ -15,7 +15,7 @@ from typing import Any
 
 from sbob.config import Course, Settings
 from sbob.core import frontmatter, index, naming
-from sbob.core.batch import list_inputs
+from sbob.core.batch import list_inputs, list_tree
 from sbob.core.layout import Layout
 
 SOURCES = ("mappa", "appunti", "trascrizioni", "materiale")
@@ -43,7 +43,7 @@ def _files(course: Course, source: str) -> list[Path]:
     if source == "trascrizioni":
         return list_inputs(lay.trascrizioni, [".md"])
     if source == "materiale":
-        return list_inputs(lay.state / "md", [".md"])
+        return list_tree(lay.materiale_md, [".md"])
     return []
 
 

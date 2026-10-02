@@ -51,7 +51,7 @@ def test_gemini_gets_native_subpdfs(pdf, tmp_path):
     assert sorted((a, b) for a, b, _ in role.seen) == [(1, 2), (3, 4), (5, 5)]
     assert all(kinds == ("FilePart", "TextPart") for *_, kinds in role.seen)
     meta, body = frontmatter.read(out)
-    assert meta == {"corso": "X"} and [l for l in body.splitlines() if l] == [f"## Pagina {i}" for i in range(1, 6)]
+    assert meta == {"corso": "X", "conversione": "visione"} and [l for l in body.splitlines() if l] == [f"## Pagina {i}" for i in range(1, 6)]
     assert not list((out.parent / ".checkpoints").rglob("*.md"))          # checkpoint puliti a fine lavoro
 
 
@@ -109,3 +109,53 @@ def test_server_overload_does_not_split_into_pages(pdf, tmp_path):
     role = Overloaded()
     r = convert_pdf(pdf, tmp_path / "o.md", role, pages_per_block=5)
     assert role.seen == [(1, 5, ())] and sorted(r.failed) == [1, 2, 3, 4, 5]     # una sola chiamata, niente split
+
+
+class QuotaRole(FakeRole):
+    """Visione: finisce la quota dopo `ok_calls` chiamate; poi NeedsHuman."""
+    def __init__(self, ok_calls):
+        super().__init__()
+        self.ok_calls = ok_calls
+
+    def complete(self, messages, item=None, validate=None, **kw):
+        from sbob.core.report import NeedsHuman
+        if len(self.seen) >= self.ok_calls:
+            raise NeedsHuman("Quota esaurita")
+        return super().complete(messages, item, validate, **kw)
+
+
+class TextRole:
+    label, model, workers = "deepseek/flash", "flash", 1
+
+    def __init__(self):
+        self.seen = []
+
+    def complete(self, messages, item=None, validate=None, **kw):
+        assert "PAGINA" in messages[0].parts[0].text and kw["system"]
+        first, last = (int(x) for x in item.rsplit("#t", 1)[1].split("-"))
+        self.seen.append((first, last))
+        return LLMResult(text="\n".join(f"testo {p}" for p in range(first, last + 1)))
+
+
+def test_quota_exhausted_falls_back_to_text_and_upgrades_later(pdf, tmp_path):
+    out = tmp_path / "md" / "dispensa.md"
+    ckpt = tmp_path / "ck"
+    text = TextRole()
+    r = convert_pdf(pdf, out, QuotaRole(ok_calls=1), pages_per_block=2, text_role=text, checkpoint_dir=ckpt, workers=1)
+    assert r.complete and r.degraded == [3, 4, 5]                    # blocco 1-2 con la visione, il resto solo testo
+    meta, body = frontmatter.read(out)
+    assert meta["conversione"] == "misto" and "## Pagina 1" in body and "testo 3" in body
+    assert ckpt.exists()                                              # i checkpoint restano per l'upgrade
+
+    role = FakeRole()                                                 # quota tornata: upgrade delle sole pagine solo-testo
+    r2 = convert_pdf(pdf, out, role, pages_per_block=2, text_role=text, checkpoint_dir=ckpt, upgrade=True, workers=1)
+    assert r2.complete and r2.degraded == [] and sorted((a, b) for a, b, _ in role.seen) == [(3, 4), (5, 5)]
+    meta, body = frontmatter.read(out)
+    assert meta["conversione"] == "visione" and "testo 3" not in body and not ckpt.exists()
+
+
+def test_quota_without_text_role_still_raises(pdf, tmp_path):
+    import pytest
+    from sbob.core.report import NeedsHuman
+    with pytest.raises(NeedsHuman):
+        convert_pdf(pdf, tmp_path / "o.md", QuotaRole(0), pages_per_block=2, workers=1)

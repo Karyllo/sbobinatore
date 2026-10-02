@@ -15,6 +15,7 @@ from sbob.core.status import course_status
 
 console = Console(stderr=True)
 STEP_LABELS = {
+    "materiale": "Aggiorna il materiale (WeBeep, siti dei docenti)",
     "download": "Scarica le registrazioni",
     "audio": "Estrai l'audio dai video",
     "trascrivi": "Trascrivi gli audio",
@@ -26,7 +27,8 @@ def suggest_steps(status: dict[str, Any], course: Course) -> dict[str, bool]:
     """Quali passi pre-selezionare: quelli per cui ci sono file pronti da elaborare."""
     todo = status["da_fare"]
     return {
-        "download": bool(course.sorgente) and status["totali"]["video"] == 0,
+        "materiale": bool(course.webeep_id or course.extra.get("materiale_siti")),
+        "download": bool(course.sorgenti) and status["totali"]["video"] == 0,
         "audio": bool(todo["audio"]),
         "trascrivi": bool(todo["trascrizione"]),
         "appunti": bool(todo["appunti"]),

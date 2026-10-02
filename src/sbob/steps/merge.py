@@ -5,7 +5,7 @@ Modi (--modo):
   monolite  un solo file con indice, marker [[ID_SESSIONE_n]] e box di metadati per ogni lezione
   tde       come monolite ma per i temi d'esame (file con 'tde' nel nome), ordinati per data
 
-Sorgente (--da): appunti (solo *_appunti.md) · trascrizioni · materiale (.sbob/md, vedi fase materiale).
+Sorgente (--da): appunti (solo *_appunti.md) · trascrizioni · materiale (materiale_md/, convertito da `sbob materiale`).
 Il merge rigenera sempre l'output: è un derivato, non c'è nulla da "saltare".
 """
 
@@ -17,7 +17,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from sbob.core import frontmatter, naming
-from sbob.core.batch import atomic_write_text, list_inputs
+from sbob.core.batch import atomic_write_text, list_inputs, list_tree
 from sbob.core.report import StepReport
 from sbob.steps.base import StepContext
 
@@ -95,7 +95,7 @@ def source_files(ctx: StepContext, da: str) -> tuple[list[Path], str]:
     if da == "trascrizioni":
         return list_inputs(lay.trascrizioni, [".md"]), "trascrizioni"
     if da == "materiale":
-        return list_inputs(lay.state / "md", [".md"]), "materiale"
+        return list_tree(lay.materiale_md, [".md"]), "materiale"
     raise ValueError(f"--da deve essere appunti|trascrizioni|materiale (non '{da}')")
 
 
@@ -174,7 +174,8 @@ def run(ctx: StepContext) -> StepReport:
         rep.error = str(e)
         return rep
     if modo == "tde":
-        files = [p for p in files if "tde" in p.name.lower()]
+        # nome con "tde", oppure (per il materiale) frontmatter tipo: tde assegnato da `sbob materiale`
+        files = [p for p in files if "tde" in p.name.lower() or frontmatter.read(p)[0].get("tipo") == "tde"]
     if not files:
         rep.notes.append(f"Nessun file da unire ({da}{', con tde nel nome' if modo == 'tde' else ''}).")
         return rep

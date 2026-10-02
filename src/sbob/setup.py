@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +69,28 @@ def render_config(root: str, lingua: str, preset: str, courses: list[str] = ()) 
             **p["notes"], "temperature": 0.1, "max_tokens": 8192, "thinking": False, "tentativi": 3}.items())]
     parts.append("")
     return "\n".join(parts) + "".join("\n" + c for c in courses)
+
+
+def set_course_field(cfg: Path, slug: str, key: str, value: Any) -> None:
+    """Scrive/aggiorna `key = value` nel blocco [corsi.<slug>] di sbob.toml, senza toccare il resto del file."""
+    if cfg is None or not cfg.exists():
+        raise ValueError("sbob.toml non trovato")
+    lines = cfg.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, l in enumerate(lines) if l.strip() == f"[corsi.{slug}]"), None)
+    if start is None:
+        raise ValueError(f"[corsi.{slug}] non trovato in {cfg}")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
+    new = f"{key} = {q(value)}"
+    for i in range(start + 1, end):
+        if re.match(rf"\s*{re.escape(key)}\s*=", lines[i]):
+            lines[i] = new
+            break
+    else:
+        pos = end
+        while pos > start + 1 and not lines[pos - 1].strip():      # dopo l'ultima riga non vuota del blocco
+            pos -= 1
+        lines.insert(pos, new)
+    cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def needed_providers(preset: str) -> list[str]:
