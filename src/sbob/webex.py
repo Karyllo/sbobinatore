@@ -110,6 +110,22 @@ def links_in_html(text: str) -> list[str]:
     return list(out.values())
 
 
+_ANCHOR = re.compile(r"""<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>""", re.I | re.S)
+_TAGS = re.compile(r"<[^>]+>")
+
+
+def anchors_in_html(text: str) -> list[tuple[str, str]]:
+    """[(link, testo del link)] per le registrazioni in una pagina HTML, senza doppioni (conta il primo)."""
+    out: dict[str, tuple[str, str]] = {}
+    for href, label in _ANCHOR.findall(text):
+        u = unwrap(href)
+        d = unquote(u)
+        m = _RECORDING.search(d) or _LDR.search(d)
+        if m:
+            out.setdefault(m.group(1).lower(), (u, html.unescape(_TAGS.sub("", label)).strip()))
+    return list(out.values())
+
+
 def _when(text: str | None) -> datetime | None:
     try:
         return datetime.strptime(text, "%Y-%m-%d %H:%M:%S") if text else None

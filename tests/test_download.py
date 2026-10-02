@@ -301,3 +301,25 @@ def test_recman_helpers():
                                  {"modname": "url", "contents": [{"fileurl": "https://altro.it"}]},
                                  {"modname": "resource", "contents": [{"fileurl": good}]}]}]
     assert archive_entries(C(), 1) == [good]
+
+
+def test_webeep_source_reads_forum_posts(settings, course_with_links, monkeypatch):
+    from sbob.webeep import client as wc
+    c = course_with_links
+    c.webeep_id = 7
+    ldr = "https://politecnicomilano.webex.com/politecnicomilano/ldr.php?RCID={}"
+    post = (f'<p><a href="{ldr.format(ID1)}">Lezione 3 parte 1 - 19-09-25</a> e '
+            f'<a href="{URL.format(ID2)}">Esercitazione 2 - 22-09-25</a></p><p><a href="{URL.format(ID2)}">doppione</a></p>')
+
+    class C:
+        def __init__(self, token): pass
+        def call(self, fn, **kw):
+            if fn == "core_course_get_contents":
+                return [{"section": 1, "summary": "", "modules": [{"id": 5, "modname": "forum", "instance": 99, "name": "Annunci"}]}]
+            if fn == "mod_forum_get_forum_discussions":
+                assert kw["forumid"] == 99
+                return {"discussions": [{"discussion": 1}, {"discussion": 2}]}
+            return {"posts": [{"message": post}] if kw["discussionid"] == 1 else [{"message": "niente link"}]}
+    monkeypatch.setattr(wc, "WebeepClient", C)
+    got = download.webeep_links(c, {"tipo": "webeep"})
+    assert [(m["argomento"], m["tipo"]) for _, m in got] == [("Lezione 3 parte 1 - 19-09-25", "lez"), ("Esercitazione 2 - 22-09-25", "ese")]

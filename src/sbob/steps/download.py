@@ -126,6 +126,26 @@ def webeep_links(course: Course, src: dict) -> list[tuple[str, dict]]:
                 elif m.get("modname") == "page" and c.get("filename") == "index.html":
                     out += [(u, {}) for u in webex.links_in_html(client.text(url))]
             out += [(u, meta) for u in webex.links_in_html(m.get("description") or "")]
+            if m.get("modname") == "forum":                 # es. il post "Links alle registrazioni" nella bacheca annunci
+                out += _forum_links(client, m)
+    return out
+
+
+def _forum_links(client, module: dict) -> list[tuple[str, dict]]:
+    """Link alle registrazioni nei post di un forum; il testo del link ("Lezione 3 parte 2 - 19-09-25") dà tipo e argomento."""
+    out: list[tuple[str, dict]] = []
+    try:
+        discussions = client.call("mod_forum_get_forum_discussions", forumid=module["instance"], perpage=100)
+    except RuntimeError:
+        return out                                              # forum non leggibile con l'API: si ignora
+    for d in discussions.get("discussions", []):
+        try:
+            posts = client.call("mod_forum_get_discussion_posts", discussionid=d["discussion"]).get("posts", [])
+        except RuntimeError:
+            continue
+        for post in posts:
+            for url, label in webex.anchors_in_html(post.get("message") or ""):
+                out.append((url, {k: v for k, v in (("argomento", label), ("tipo", tipo_from_title(label))) if v}))
     return out
 
 
