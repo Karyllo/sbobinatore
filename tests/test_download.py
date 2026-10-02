@@ -322,4 +322,12 @@ def test_webeep_source_reads_forum_posts(settings, course_with_links, monkeypatc
             return {"posts": [{"message": post}] if kw["discussionid"] == 1 else [{"message": "niente link"}]}
     monkeypatch.setattr(wc, "WebeepClient", C)
     got = download.webeep_links(c, {"tipo": "webeep"})
-    assert [(m["argomento"], m["tipo"]) for _, m in got] == [("Lezione 3 parte 1 - 19-09-25", "lez"), ("Esercitazione 2 - 22-09-25", "ese")]
+    assert [(m.get("argomento"), m["tipo"]) for _, m in got] == [("parte 1", "lez"), (None, "ese")]
+
+
+def test_topic_from_label():
+    f = download.topic_from_label
+    assert f("Lezione 1 - 15-09-25") is None and f("Esercitazione 2 - 22-09-25") is None
+    assert f("Lezione 3 parte 2 - 19-09-25") == "parte 2"
+    assert f("Lez 5 - Limiti notevoli") == "Limiti notevoli" and "introduzione" in f("2025-09-19 Lez 01 - introduzione")
+    assert f(None) is None and f("Registrazione") == "Registrazione"

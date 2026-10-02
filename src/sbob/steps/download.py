@@ -52,6 +52,19 @@ def set_cookie(settings: Settings, nome: str, valore: str) -> None:
     save_cookie(nome, valore.strip())
 
 
+_LABEL_HEAD = re.compile(r"^\s*(?:lezione|lez\.?|esercitazione|esercitazioni|esercizi|es\.?|laboratorio|lab\.?|seminario)\s*\d*\s*[-–:.]*\s*", re.I)
+_LABEL_DATE = re.compile(r"[\s\-–:]*\(?\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b\)?\s*$")
+
+
+def topic_from_label(label: str | None) -> str | None:
+    """'Lezione 3 parte 2 - 19-09-25' → 'parte 2'; 'Lezione 1 - 15-09-25' → None (numero e data stanno già nel nome);
+    'Lez 5 - Limiti notevoli' → 'Limiti notevoli'."""
+    if not label:
+        return None
+    text = _LABEL_DATE.sub("", _LABEL_HEAD.sub("", label.strip(), count=1)).strip(" -–:.")
+    return text or None
+
+
 def tipo_from_title(title: str | None) -> str | None:
     """'2025-09-19 Lez 01 - introduzione' → lez; 'Esercitazione 3' → ese; 'Lab 2' → lab."""
     for pat, tipo in _TITLE_TIPO:
@@ -118,7 +131,7 @@ def webeep_links(course: Course, src: dict) -> list[tuple[str, dict]]:
             if only_module is not None and m.get("id") != only_module:
                 continue
             title = (m.get("name") or "").strip() or None
-            meta = {k: v for k, v in (("argomento", title), ("tipo", tipo_from_title(title))) if v}
+            meta = {k: v for k, v in (("argomento", topic_from_label(title)), ("tipo", tipo_from_title(title))) if v}
             for c in m.get("contents") or []:
                 url = c.get("fileurl") or ""
                 if c.get("type") == "url" and webex.is_recording_link(url):
@@ -145,7 +158,7 @@ def _forum_links(client, module: dict) -> list[tuple[str, dict]]:
             continue
         for post in posts:
             for url, label in webex.anchors_in_html(post.get("message") or ""):
-                out.append((url, {k: v for k, v in (("argomento", label), ("tipo", tipo_from_title(label))) if v}))
+                out.append((url, {k: v for k, v in (("argomento", topic_from_label(label)), ("tipo", tipo_from_title(label))) if v}))
     return out
 
 
