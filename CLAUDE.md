@@ -116,7 +116,7 @@ Ogni adapter è `Classe(name, key, conf)`. Crea il client SDK **una volta** in `
 - Test: il chunker dà lo stesso output dell'originale; la pipeline funziona con un FakeProvider (vedi `tests/test_registry.py`).
 
 **merge** (`steps/merge.py`)
-- Porta `~/Desktop/Karyl/SBobinatRe/4.merge_file/{merge.py, merge2.py, mergtde.py}` come `modo = split | monolite | tde`.
+- Porta `~/Desktop/Karyl/SBobinatRe/4.merge_file/{merge.py, merge2.py, mergtde.py}` come `modo = split | monolite | tde`. Il formato è quello pulito della fase 9 (`compose`, vedi sotto).
 - Un solo `downgrade_headers`, che non tocca le righe dentro i blocchi ```` ``` ````.
 - `TYPE_MAP` viene da `naming.TIPI`. `inizio_corso` viene dalla config del corso.
 - Output in `merge/`.
@@ -298,14 +298,14 @@ Lato sbob:
 - **Provato dal vero:** EDP (Zunino) → 2024-25 (id 18181) e 2023-24 (13974) aggiunte; FRO (Carello) → avviso corretto perché nel 2024-25 e 2023-24 il docente era Belotti; `materiale --archivio 2024-25 --dry-run` e `link --archivio 2024-25` (registrazioni lette da recman).
 - **Non provato:** un ciclo completo di trascrizione/appunti su un'edizione passata.
 
-## Fase 9 (richiesta dell'utente 2026-10-02, DA PIANIFICARE e implementare dopo l'archivio)
-1. **Scegliere quali corsi sincronizzare.** L'utente è iscritto a moltissimi corsi su WeBeep e non vuole sincronizzare tutto. Oggi sbob lavora solo sui corsi che stanno in sbob.toml con `webeep_id` (quindi nulla si sincronizza da solo), ma manca il modo comodo di sceglierli: serve un comando interattivo (`sbob webeep scegli`: elenco con spunte, filtro per anno, crea le voci `[corsi.<slug>]` con `webeep_id` e cartella) e un `sbob aggiorna` che lancia la catena solo sui corsi scelti. Opzione per "sincronizza tutto" solo se esplicita.
-2. **NotebookLM automatico per corso** (API non ufficiale, `notebooklm-py`, già usata per la trascrizione):
-   - un taccuino per corso, creato in automatico;
-   - **un file `.md` per cartella**, con il nome della cartella, che contiene tutti i `.md` già convertiti al suo interno (slide, PDF, esercitazioni, appunti e così via). È la stessa logica di `steps/merge.py` (limite 500k parole per sorgente), applicata cartella per cartella;
-   - **aggiornamento incrementale**: se il contenuto di una cartella cambia (hash), si sostituisce solo quella sorgente nel taccuino; lo stato (id sorgente e hash) sta nel manifest;
-   - obiettivo dell'utente: il taccuino sempre aggiornato con lezioni, materiale e tutte le informazioni, per chiudere l'automazione controllata da un agente.
-   - Da verificare: limiti di sorgenti per taccuino, rate limit e stabilità dell'API non ufficiale, login (`notebooklm login`, `NeedsHuman`).
+## Fase 9 (fatta: merge pulito, taccuino NotebookLM, scelta dei corsi)
+- **Merge** (`steps/merge.py`): una sola `compose(title, intro, docs, edizione)` per monolite, tde e taccuino. Output deterministico (niente data di generazione: l'hash decide se ricaricare), senza emoji, righe decorative, `<br>`, marcatori `[[ID_…]]` né "istruzioni per l'AI" (in NotebookLM sarebbero contenuto: le istruzioni stanno nella persona della chat, `prompts/<lingua>/notebook_persona.md`). Titoli `Lezione 01 · 14/04/2026 · Argomento` (`Doc.heading`), per i temi `Esame del gg/mm/aaaa`; i titoli del corpo si spostano con `nest_headers` (il più alto diventa `###`). `Course.docente` (facoltativo) va nel titolo; lo scrive `webeep scegli`.
+- **Taccuino** (`steps/notebook.py`, `notebooklm_cli.py`, comando `sbob notebook <corso> [aggiungi-archivio|rimuovi-archivio <anno>]`):
+  - sorgenti: `Appunti` (+ `(n)` oltre 500k parole) e una per cartella di primo livello sotto la sezione di `materiale_md/` (`Materiali — esempi di temi d'esame`); trascrizioni escluse; edizioni passate solo a comando.
+  - stato nel manifest (`notebook`: id, hash persona, archivi, `sources: {titolo: {hash, id}}`). Hash uguale → non si tocca; cambiata → aggiungi, `source wait`, poi cancella la vecchia; sparita → cancella. Solo le sorgenti create da sbob (mai quelle aggiunte a mano). Limite `[notebook] max_sorgenti` (50). Attivo solo con `[notebook] attivo = true` (ultimo passo di `PIPELINE`) o col comando esplicito.
+  - **Scoperte sul CLI reale** (notebooklm-py 0.7.3): `--title` su un file viene ignorato, il titolo mostrato è il **nome del file** (per questo `.sbob/notebook/<titolo>.md`) e le sorgenti si riconoscono per id; il CLI rifiuta i symlink (su macOS anche `/tmp`): si passa `Path.resolve()`; l'avviso `UnknownTypeWarning` va su stderr, il JSON è su stdout; `delete` di un taccuino è `notebooklm delete -n <id> --yes`.
+- **Scelta dei corsi** (`scelta.py`): `sbob webeep scegli [--id N]… [--tutti-gli-anni]` (elenco a spunte dell'anno più recente, pre-spuntati i già collegati; crea `[corsi.<slug>]` con `webeep_id`, `docente` e fonti archivio+link.txt; i tolti dalle spunte si scollegano solo su conferma, i file restano). `sbob aggiorna` = catena completa su tutti i corsi con `webeep_id` (si ferma al primo `NeedsHuman`).
+- **Provato dal vero:** taccuino su FRO (creazione, sorgenti per cartella, secondo run senza modifiche, sostituzione di una sola sorgente), `webeep scegli --id` e `aggiorna --dry-run` su una copia della config. **Non provato:** `aggiungi-archivio` e il limite di sorgenti sul CLI vero (coperti dai test con un finto CLI); `webeep scegli` interattivo (serve un terminale).
 
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.

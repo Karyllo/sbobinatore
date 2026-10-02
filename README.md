@@ -60,6 +60,9 @@ sbob cerca "matrice di copertura" --corso <corso>
 sbob verifica <corso>         # contenuto perso, trascrizioni troncate, numerazione
 sbob pdf slide.pdf --corso <corso>
 sbob merge <corso> --modo monolite
+sbob webeep scegli            # scegli con un elenco a spunte i corsi da sincronizzare
+sbob aggiorna                 # la catena completa su tutti i corsi scelti
+sbob notebook <corso>         # taccuino NotebookLM del corso, aggiornato
 ```
 Ogni comando accetta `--json` (output per script e agenti) e `--help`.
 
@@ -112,6 +115,16 @@ sbob archivio <corso> elenco
 sbob run <corso> --archivio 2024-25       # qualsiasi passo accetta --archivio
 ```
 Se per un anno non c'è lo stesso docente, sbob non aggiunge niente e ti avvisa (puoi scegliere il docente o forzare con `--id`). La mappa del corso ha una sezione per ogni edizione e collega i concetti tra gli anni; la ricerca guarda l'anno in corso e, se non trova niente (o con `--archivi`), anche gli anni passati.
+
+### Quali corsi sincronizzare
+Su WeBeep sei iscritto a molti corsi: `sbob webeep scegli` mostra l'elenco dell'anno in corso con le spunte e crea in `sbob.toml` solo quelli scelti (i tolti dalle spunte restano, solo scollegati). Poi `sbob aggiorna` fa tutta la catena su quei corsi, uno dopo l'altro.
+
+### Taccuino NotebookLM per corso
+Con `notebooklm login` fatto (e `[notebook] attivo = true` in `sbob.toml` per averlo dentro `sbob run`), `sbob notebook <corso>` crea il taccuino del corso e lo tiene aggiornato:
+- una sorgente per gli **appunti** e una per ogni **cartella** del materiale (le trascrizioni no, sarebbero ridondanti);
+- quando una cartella cambia, si sostituisce solo la sua sorgente;
+- le sorgenti che hai aggiunto a mano non vengono toccate;
+- gli anni passati si aggiungono solo con `sbob notebook <corso> aggiungi-archivio <anno>`.
 
 ### Struttura di un corso
 ```

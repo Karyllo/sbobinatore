@@ -55,6 +55,12 @@ converti = true              # false = scarica e basta (si converte a mano con `
 se_finisce_quota = "testo"   # "testo" = prosegue con un modello solo-testo e avvisa; "ferma" = si ferma e riprende dopo
 # File da siti disordinati: scaricali a mano in <corso>/materiale/<cartella a scelta>/, sbob li tratta come gli altri.
 
+# ---------------------------------------------------------------- taccuino NotebookLM
+# Un taccuino per corso con appunti e materiale, sempre aggiornato (richiede `notebooklm login`, vedi `sbob doctor`).
+[notebook]
+attivo = false               # true = `sbob run` e `sbob aggiorna` aggiornano anche il taccuino; `sbob notebook <corso>` lo fa a richiesta
+max_sorgenti = 50            # oltre questo numero di sorgenti sbob avvisa e non ne aggiunge
+
 # ---------------------------------------------------------------- provider
 # I default (gemini, deepseek, openai, anthropic) sono già definiti; qui si aggiungono o modificano.
 # chiavi = prefisso env: legge PREFISSO_ACCOUNT1..N e PREFISSO.
