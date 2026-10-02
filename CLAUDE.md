@@ -290,6 +290,16 @@ Lato sbob:
   - `sbob download edp --dry-run` con `sorgenti = [archivio, txt]`: 26 pianificate, nessun duplicato.
 - Il metodo `link.txt` resta la base e la riserva (richiesta esplicita dell'utente). La procedura con Claude in Chrome resta in SKILL.md come ultima riserva.
 
+## Archivio anni precedenti: decisioni finali dell'utente (2026-10-02), DA IMPLEMENTARE (nessun codice scritto)
+- Layout: `<corso>/archivio/<anno>/` con le stesse sottocartelle e un suo `.sbob/`. Config: `archivio = { "2024-25" = <id WeBeep> }` nel corso, più `archivio_docente` opzionale.
+- Comando: **`sbob archivio <corso> <azione> [anno]`** (un solo comando con azioni `aggiungi`, `docenti`, `elenco`). `--archivio <anno>` su tutti i passi, `run` compreso; con `--archivio scegli` elenco interattivo degli anni configurati. Sia l'aggiunta con comando sia la scelta da elenco, con `aggiungi` come predefinito.
+- `aggiungi`: cerca tra i corsi WeBeep (`WebeepClient.courses()`, ha anche gli anni passati) quelli con lo **stesso codice** (primi 6 cifre del fullname) e **stesso docente**. Docente = ultima parentesi non numerica del fullname (attenzione a "(1)", "(2)" e a "[Semestre 2] (DOCENTE"), confrontato per insieme di parole senza accenti/maiuscole. Senza anno: checkbox interattivo, o tutti se non c'è terminale.
+- Se non c'è lo stesso docente: **avvisa** (exit 3, elenco dei docenti disponibili) e non aggiunge. `sbob archivio <corso> docenti` fa scegliere il docente (elenco per codice e anni) e lo salva in `archivio_docente`; `aggiungi --docente` vale una volta sola.
+- **Ricerca:** di default solo l'anno in corso; se non trova niente cerca anche negli archivi (e lo dice); `--archivi` li include sempre.
+- Frontmatter `edizione: <anno>` ovunque (`core/frontmatter.lesson_meta`, `steps/materiale`, `steps/pdf`). L'edizione passata si ottiene derivando un `Course` (cartella = `<corso>/archivio/<anno>`, `anno_accademico` = anno, `webeep_id` = id dell'archivio, fonti di default `[archivio, txt]`) e riusando i passi com'erano.
+- Indice/mappa del corso principale: sezione per edizione e concetti incrociati tra anni (`core/index.render_course`, `render_all`, catalog.json); `status` e menu ("lavora sull'archivio dell'anno precedente").
+- File da toccare: `config.py` (Course.archivio, archivio_docente), nuovo `core/archivio.py`, `cli.py`, `core/index.py`, `core/search.py`, `core/status.py`, `menu.py`, `setup.py` (`q` per le chiavi del dizionario TOML), test, README, skill.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).
