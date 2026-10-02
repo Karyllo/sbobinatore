@@ -88,7 +88,7 @@ DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
 
 DEFAULT_MODELLI: dict[str, dict[str, Any]] = {
     "trascrizione": {"provider": "gemini", "model": "gemini-3-flash-preview", "rpm": 10, "max_tokens": 65536,
-                     "temperature": 0.0,
+                     "temperature": 0.0, "thinking": "low",
                      # stessa chiave, altro modello = quota giornaliera separata: la usa quando finisce quella principale
                      "riserva": {"provider": "gemini", "model": "gemini-3.8-flash", "rpm": 10}},
     "refiner": {"provider": "gemini", "model": "gemini-3.1-flash-lite", "rpm": 30,

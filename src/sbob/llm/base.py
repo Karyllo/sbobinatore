@@ -62,7 +62,7 @@ class Params:
     temperature: float | None = None
     top_p: float | None = None
     max_tokens: int | None = None
-    thinking: bool = False          # ragionamento esteso: ogni adapter lo mappa al proprio meccanismo
+    thinking: bool | str = False    # ragionamento esteso: ogni adapter lo mappa al proprio meccanismo; Gemini accetta anche il livello ("minimal" | "low" | "medium" | "high")
     system: str | None = None
     timeout: float = 600.0
 

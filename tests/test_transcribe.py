@@ -75,6 +75,34 @@ def test_gemini_truncated_falls_back_to_segments(tmp_path, monkeypatch):
     assert role.calls == ["lez", "lez#1", "lez#2"]
 
 
+def test_segment_already_paid_is_reused_after_quota(tmp_path, monkeypatch):
+    from sbob.core.report import QuotaExhausted
+    from sbob.steps.notes.pipeline import ChunkCache
+    audio = tmp_path / "a.aac"
+    audio.write_bytes(b"x")
+    parts = [tmp_path / "a.part000.aac", tmp_path / "a.part001.aac"]
+    for p in parts:
+        p.write_bytes(b"seg")
+    monkeypatch.setattr(gemini.media, "split_audio", lambda *a: parts)
+    monkeypatch.setattr(gemini.media, "duration_seconds", lambda p: 2700.0)
+    cache = ChunkCache(tmp_path / "cache")
+
+    class Quota(FakeRole):
+        def complete(self, messages, item=None, **kw):
+            self.calls.append(item)
+            res = self.results.pop(0)
+            if isinstance(res, Exception):
+                raise res
+            return res
+    first = Quota([LLMResult(text="troncato", finish_reason="length"), LLMResult(text="[00:05] prima", finish_reason="stop"),
+                   QuotaExhausted("finita")])
+    with pytest.raises(QuotaExhausted):
+        gemini.transcribe_file(first, audio, "p", tmp_path, "lez", cache)
+    second = FakeRole([LLMResult(text="troncato", finish_reason="length"), LLMResult(text="[00:05] seconda", finish_reason="stop")])
+    out = gemini.transcribe_file(second, audio, "p", tmp_path, "lez", cache)
+    assert out == "[00:05] prima\n\n[45:05] seconda" and second.calls == ["lez", "lez#2"]      # il segmento 1 non si rifà
+
+
 def test_gemini_failure_is_reported_per_file(settings, audio_course, monkeypatch):
     c, _ = audio_course
     role = FakeRole([LLMResult(error_kind="other", error="boom"), LLMResult(text="ok", finish_reason="stop")])

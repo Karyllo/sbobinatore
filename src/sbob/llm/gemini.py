@@ -76,8 +76,9 @@ class GeminiProvider:
                 cfg["max_output_tokens"] = params.max_tokens
             if params.system:
                 cfg["system_instruction"] = params.system
-            if params.thinking:
-                cfg["thinking_config"] = types.ThinkingConfig(include_thoughts=False, thinking_level="HIGH")  # type: ignore[arg-type]
+            if params.thinking:       # True = HIGH; una stringa è il livello (la trascrizione usa "low": il ragionamento non serve e mangia il budget di output)
+                level = params.thinking.upper() if isinstance(params.thinking, str) else "HIGH"
+                cfg["thinking_config"] = types.ThinkingConfig(include_thoughts=False, thinking_level=level)  # type: ignore[arg-type]
 
             resp = self.client.models.generate_content(
                 model=model, contents=self._contents(messages, uploaded),
