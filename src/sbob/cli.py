@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from sbob.config import ConfigError, Settings, load_settings
-from sbob.core.report import Exit, NeedsHuman, StepReport
+from sbob.core.report import Exit, NeedsHuman, QuotaExhausted, StepReport
 from sbob.steps.base import PIPELINE, StepContext, get_step
 
 app = typer.Typer(add_completion=False, no_args_is_help=False, rich_markup_mode="rich",
@@ -110,7 +110,9 @@ def _run_step(step: str, corso: str, *, force=False, dry_run=False, only=None, o
         with _stdout_guard(quiet):
             return get_step(step)(ctx)
     except NeedsHuman as e:
-        return StepReport(step=step, corso=corso, needs_human=str(e), action=e.action)
+        rep = ctx.last_report or StepReport(step=step, corso=corso)       # tiene ciò che il passo aveva già completato
+        rep.needs_human, rep.action, rep.quota = str(e), e.action, isinstance(e, QuotaExhausted)
+        return rep
     except (ModuleNotFoundError, NotImplementedError) as e:
         return StepReport(step=step, corso=corso, error=f"passo non disponibile: {e}")
     except Exception as e:  # noqa: BLE001 — il report deve sempre uscire, anche su bug
@@ -471,8 +473,8 @@ def _run_chain(corso: str, steps, *, archivio=None, force=False, dry_run=False, 
         reports.append(r)
         if not as_json:
             _print_report(r)
-        if r.exit_code in (Exit.HUMAN, Exit.ERROR):
-            break
+        if r.exit_code == Exit.ERROR or (r.exit_code == Exit.HUMAN and not r.quota):
+            break                      # quota finita: i passi dopo lavorano su ciò che c'è già (es. appunti delle lezioni trascritte)
     return reports
 
 

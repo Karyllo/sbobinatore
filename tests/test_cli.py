@@ -99,3 +99,26 @@ def test_log_file_has_timestamps_and_traceback_on_crash(settings, monkeypatch):
     assert d["exit_code"] == 1 and "sbob.log" in d["error"]
     assert "INFO  [audio] sto per rompermi" in log and "ERROR [audio] Traceback" in log and "RuntimeError: bug finto" in log
     assert log.splitlines()[0][:4] == "2026" or log.splitlines()[0][4] == "-"                    # data e ora in testa
+
+
+def test_chain_continues_after_quota_but_stops_on_login(settings, monkeypatch):
+    from sbob import cli
+    from sbob.core.report import NeedsHuman, QuotaExhausted
+
+    def quota_step(ctx):
+        rep = ctx.report(ctx.step)
+        rep.done.append("lez01")                                     # già fatto prima che finisse la quota: non va perso
+        raise QuotaExhausted("Quota esaurita", action="aspetta")
+
+    def ok_step(ctx):
+        return ctx.report(ctx.step)
+
+    def login_step(ctx):
+        raise NeedsHuman("scaduto", action="sbob login")
+
+    steps = {"audio": quota_step, "trascrivi": ok_step, "appunti": login_step, "mappa": ok_step}
+    monkeypatch.setattr(cli, "get_step", lambda name: steps[name])
+    reps = cli._run_chain("prova", ("audio", "trascrivi", "appunti", "mappa"), as_json=True)
+    assert [r.step for r in reps] == ["audio", "trascrivi", "appunti"]                 # "mappa" non parte: serve il login
+    assert reps[0].done == ["lez01"] and reps[0].quota and reps[0].needs_human
+    assert reps[2].needs_human and not reps[2].quota

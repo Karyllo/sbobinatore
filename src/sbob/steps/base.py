@@ -35,6 +35,7 @@ class StepContext:
     options: dict[str, Any] = field(default_factory=dict)  # opzioni specifiche del passo
     quiet: bool = False
     step: str = ""                          # nome del passo in esecuzione (per il log)
+    last_report: StepReport | None = None   # l'ultimo report creato: se il passo si ferma (NeedsHuman) non si perde ciò che era già fatto
 
     @property
     def layout(self) -> Layout:
@@ -71,7 +72,8 @@ class StepContext:
             pass                                                        # il log non deve mai rompere un passo
 
     def report(self, step: str) -> StepReport:
-        return StepReport(step=step, corso=self.course.slug, dry_run=self.dry_run)
+        self.last_report = StepReport(step=step, corso=self.course.slug, dry_run=self.dry_run)
+        return self.last_report
 
 
 StepFn = Callable[[StepContext], StepReport]

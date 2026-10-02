@@ -30,6 +30,11 @@ class NeedsHuman(Exception):
         self.action = action  # comando o istruzione suggerita, es. "sbob login"
 
 
+class QuotaExhausted(NeedsHuman):
+    """Quota (giornaliera o credito) finita su tutte le chiavi: il lavoro si riprende dopo il reset.
+    A differenza di un login scaduto, i passi successivi possono comunque lavorare su ciò che già esiste."""
+
+
 @dataclass
 class Failure:
     item: str
@@ -47,6 +52,7 @@ class StepReport:
     cost: dict[str, Any] = field(default_factory=dict) # riepilogo costi (llm.cost)
     needs_human: str | None = None
     action: str | None = None
+    quota: bool = False                                # needs_human dovuto alla quota: la catena può proseguire
     error: str | None = None
     notes: list[str] = field(default_factory=list)     # messaggi informativi
     warnings: list[str] = field(default_factory=list)  # qualcosa è andato a metà (es. quota esaurita): exit 2

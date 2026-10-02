@@ -34,7 +34,7 @@ from typing import Any
 from sbob.config import ConfigError, Settings
 from sbob.core.keys import MissingKeyError, load_keys
 from sbob.core.ratelimit import LimiterPool
-from sbob.core.report import NeedsHuman
+from sbob.core.report import NeedsHuman, QuotaExhausted
 from sbob.llm.base import RETRYABLE, ErrorKind, LLMResult, Message, Params, Provider
 from sbob.llm.cost import CostTracker, Prices
 
@@ -112,8 +112,8 @@ class Role:
                 slot = self._slots[next(self._rr)]
                 if not slot.dead:
                     return slot
-        raise NeedsHuman(f"Quota esaurita su tutte le chiavi di {self.provider_name} ({self.name})",
-                         action="aspetta il reset della quota o aggiungi chiavi/credito")
+        raise QuotaExhausted(f"Quota esaurita su tutte le chiavi di {self.provider_name} ({self.name})",
+                             action="aspetta il reset della quota (di solito alle 9:00 italiane per Google) o aggiungi chiavi/credito")
 
     def complete(self, messages: list[Message], item: str | None = None,
                  validate=None, allow_truncated: bool = False, **overrides: Any) -> LLMResult:
