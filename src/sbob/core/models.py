@@ -97,8 +97,10 @@ def analyze(configured: list[dict[str, str]], available: list[str], previous: li
     notable = [n for n in new_since if (family(n) or ("transcribe" in n,))]
     special = sorted(n for n in available if "transcribe" in n)
     if special and not any("transcribe" in r["modello"] for r in configured):
-        warnings.append(f"Esiste un modello dedicato alla trascrizione ({', '.join(special)}): il ruolo trascrizione "
-                        "oggi non lo usa. Potrebbe dare risultati migliori o una quota separata: vale una prova.")
+        warnings.append(f"Esiste un modello dedicato alla trascrizione ({', '.join(special)}). Provato da sbob il 2026-10-03 su "
+                        "3 minuti di lezione: è velocissimo e fedele, ma NON mette i timestamp (li ignora anche se richiesti) e sul "
+                        "gratuito ha un limite di 10.000 token di ingresso al minuto (circa 6 minuti di audio al minuto). "
+                        "Utile solo se i timestamp non servono; con i timestamp restano i modelli Flash/Flash-Lite.")
     if notable:
         warnings.append("Nuovi dall'ultimo controllo: " + ", ".join(notable) + ".")
     aliases = sorted(n for n in available if n.endswith("-latest"))
