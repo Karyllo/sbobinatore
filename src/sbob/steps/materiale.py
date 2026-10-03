@@ -376,6 +376,11 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
                         r = convert_pdf(pdf, out, pdf_role, course.lingua, meta=meta, text_role=text_role, upgrade=True,
                                         force=ctx.force, pages_per_block=n_pages,
                                         checkpoint_dir=lay.state / "pdf_checkpoints" / key, log=ctx.log)
+                        if not r.complete and not r.failed:
+                            # nessuna pagina fallita: sono scansioni che aspettano un modello a visione (quota finita)
+                            rep.warnings.append(f"{rel}: scansione in attesa di un modello a visione (quota esaurita); "
+                                                "si completa al prossimo giro")
+                            continue
                         if not r.complete:
                             pages = ", ".join(map(str, sorted(r.failed)))
                             rep.fail(rel, f"{len(r.failed)}/{r.pages} pagine fallite ({pages}); rilancia per riprovare")
