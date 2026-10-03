@@ -92,6 +92,23 @@ def check_webex(settings: Settings) -> list[dict]:
                    if has else "mai fatto `sbob login`", "sbob login", opzionale=True)]
 
 
+def check_model_news(settings: Settings) -> list[dict]:
+    """Modelli Gemini dei ruoli: ancora disponibili? preview? novità? (gratis, non consuma quota). Solo avvisi."""
+    from sbob.core import models
+
+    try:
+        res = models.check(settings, remember=False)
+    except Exception as e:  # noqa: BLE001 — rete assente: non è un problema di configurazione
+        return [_check("modelli Gemini", True, f"controllo saltato ({type(e).__name__})")]
+    gone = [r for r in res["ruoli"] if not r["disponibile"]]
+    if gone:
+        return [_check("modelli Gemini", False, "non più disponibili: " + ", ".join(sorted({r["modello"] for r in gone})),
+                       "sbob modelli  (poi cambia il modello in [modelli.<ruolo>] di sbob.toml)")]
+    n = len(res["avvisi"])
+    return [_check("modelli Gemini", n == 0, "disponibili, nessuna novità" if n == 0 else f"{n} novità da vedere",
+                   "sbob modelli", opzionale=True)]
+
+
 def check_secrets() -> list[dict]:
     """Permessi dei file con credenziali: se sono larghi li stringe subito (operazione sicura e idempotente)."""
     from sbob.core.secrets import secure_permissions
@@ -150,4 +167,4 @@ def check_optional(settings: Settings) -> list[dict]:
 
 def run_checks(settings: Settings, quick: bool = False) -> list[dict[str, Any]]:
     return [*check_config(settings), *check_binaries(), *check_models(settings),
-            *check_webex(settings), *check_secrets(), *check_login(), *check_optional(settings)]
+            *check_webex(settings), *([] if quick else check_model_news(settings)), *check_secrets(), *check_login(), *check_optional(settings)]

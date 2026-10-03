@@ -117,6 +117,16 @@ Un corso può avere edizioni passate (stesso docente) in `<corso>/archivio/<anno
 - Scegliere i corsi da sincronizzare spetta all'utente (`sbob webeep scegli`, elenco a spunte). Da script: `sbob webeep scegli --id <id>`. Tutti i corsi scelti in una volta: `sbob aggiorna --json`. L'aggiornamento notturno (`sbob pianifica`) lo installa l'utente: non installarlo né rimuoverlo tu senza che lo chieda.
 - PDF di slide o dispense in Markdown: `sbob pdf <file|cartella> --corso <slug> --json`. Esce in `.sbob/md/` e da lì si trova con `cerca --in materiale`.
 
+### Modelli e quota (te ne accorgi tu, l'utente non deve inseguire i provider)
+I modelli escono in fretta e ognuno è un compromesso tra qualità, stabilità dell'output e richieste al giorno (sul Gemini gratuito: 20 per modello). Per questo sbob **non cambia mai modello da solo** e l'utente non deve seguire le novità: se ne accorge sbob, tu lo riferisci.
+- **Quando controllare:** all'inizio di una sessione di lavoro sui corsi, dopo un errore di quota o 503, e quando l'utente chiede "come vanno i modelli". Comando: `sbob modelli --json` (gratis, non consuma quota). Se `avvisi` non è vuoto, **dillo all'utente** in italiano e in poche righe: cosa è uscito o cosa sta per sparire, per quale ruolo, e che un modello più nuovo non è per forza migliore (output diverso, quota diversa, i nuovi sono spesso sovraccarichi).
+- **Cosa fare con gli avvisi:**
+  - *modello non più disponibile* → urgente: le chiamate falliranno; proponi un sostituto della stessa famiglia;
+  - *preview* → può essere ritirata: proponi lo stabile;
+  - *nuova versione* o *modello dedicato alla trascrizione* → proponi una prova su UNA lezione nuova e un confronto con quella attuale. **Non sovrascrivere appunti già fatti** per provare (niente `--force` su lezioni esistenti, senza che l'utente lo chieda).
+  - Non modificare `[modelli.*]` in `sbob.toml` senza l'ok dell'utente.
+- **Quota esaurita (exit 3 con `quota` nel report):** `sbob quota --json` dice quali modelli sono fermi e fra quanto tornano (il reset di Google è verso le 2:00 italiane). Spiega le scelte: aspettare, usare un modello con quota separata (la riserva lo fa già da sola), o un provider a pagamento (aggiungere credito spetta all'utente; dopo una ricarica `sbob quota --azzera`). Non insistere in loop e non sprecare richieste per "provare" un modello: una richiesta riuscita consuma la quota, un errore di quota no.
+
 ### Qualità
 - `sbob verifica [<slug>] --json` segnala:
   - appunti molto più corti della trascrizione, cioè contenuto perso;

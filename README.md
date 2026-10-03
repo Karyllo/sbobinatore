@@ -129,6 +129,14 @@ sbob pianifica --rimuovi
 ```
 Su macOS installa un LaunchAgent che lancia `sbob aggiorna` (parte appena il Mac si riattiva, se era in stop). Se serve il login o qualcosa fallisce ti arriva una notifica, e il dettaglio è in `~/.config/sbob/aggiorna.log`. Su Linux stampa la riga da aggiungere a `crontab -e`. Il job non contiene credenziali: sbob legge token e chiavi dai soliti file.
 
+### Modelli e quota
+I modelli escono in fretta e ogni scelta è un compromesso tra qualità, stabilità e richieste al giorno (sul Gemini gratuito 20 per modello). sbob non cambia mai modello da solo, ma se ne accorge:
+```bash
+sbob modelli    # cosa esiste, cosa usano i ruoli, nuove uscite, modelli ritirati o in preview (gratis, non consuma quota)
+sbob quota      # quali modelli hanno finito la quota e fra quanto tornano (--azzera dopo una ricarica)
+```
+`sbob doctor` e `sbob aggiorna` includono lo stesso controllo, e la skill per Claude avvisa l'utente quando c'è qualcosa da sapere.
+
 ### Taccuino NotebookLM per corso
 Con `notebooklm login` fatto (e `[notebook] attivo = true` in `sbob.toml` per averlo dentro `sbob run`), `sbob notebook <corso>` crea il taccuino del corso e lo tiene aggiornato:
 - una sorgente per gli **appunti** e una per ogni **cartella** del materiale (le trascrizioni no, sarebbero ridondanti);

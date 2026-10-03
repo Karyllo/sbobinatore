@@ -489,6 +489,14 @@ def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt 
         _emit([StepReport(step="aggiorna", error="Nessun corso collegato a WeBeep: sbob webeep scegli")], as_json)
         return
     reports: list[StepReport] = []
+    try:                                     # novità sui modelli (gratis): finiscono nel report che legge l'utente o l'agente
+        from sbob.core import models as model_check
+
+        news = model_check.check(s)
+        if news["avvisi"]:
+            reports.append(StepReport(step="modelli", notes=[*news["avvisi"], *([news["nota"]] if news["nota"] else [])]))
+    except Exception:  # noqa: BLE001 — niente rete o libreria: il controllo è accessorio, l'aggiornamento prosegue
+        pass
     for slug in slugs:
         if not as_json:
             err.print(f"[bold]── {slug}[/bold]")
@@ -641,6 +649,34 @@ def archivio_cmd(corso: str,
     from sbob.archivio_cmd import run_archivio
 
     _emit([run_archivio(_settings(), corso, azione, anno, docente, id_webeep, as_json)], as_json)
+
+
+@app.command()
+def modelli(as_json: JsonOpt = False,
+            ricorda: Annotated[bool, typer.Option("--ricorda/--non-ricordare", help="Segna l'elenco di oggi come visto (per le novità del prossimo controllo).")] = True):
+    """Quali modelli Gemini esistono e cosa usano i ruoli: segnala nuove uscite, modelli ritirati e preview. Gratis, non consuma quota."""
+    from sbob.core import models
+
+    try:
+        res = models.check(_settings(), remember=ricorda)
+    except Exception as e:  # noqa: BLE001 — rete o libreria assenti: il comando informa, non rompe
+        res = {"ruoli": [], "avvisi": [f"Controllo non riuscito: {type(e).__name__}"], "nota": None,
+               "nuovi_dall_ultimo_controllo": [], "speciali": [], "alias_latest": []}
+    if as_json:
+        sys.stdout.write(json.dumps(res, ensure_ascii=False, indent=2) + "\n")
+        return
+    if res["ruoli"]:
+        t = Table("ruolo", "modello", "tipo", "più nuovi")
+        for r in res["ruoli"]:
+            t.add_row(r["ruolo"], r["modello"] + ("" if r["disponibile"] else " [red](non più disponibile)[/red]"), r["tipo"],
+                      ", ".join(r["piu_nuovi"]) or "-")
+        out.print(t)
+    for a in res["avvisi"]:
+        err.print(f"[yellow]• {a}[/yellow]")
+    if res["nota"]:
+        err.print(f"\n{res['nota']}")
+    if not res["avvisi"]:
+        err.print("[green]Nessuna novità: i modelli dei ruoli sono disponibili e non ci sono versioni più nuove.[/green]")
 
 
 @app.command()
