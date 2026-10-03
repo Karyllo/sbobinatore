@@ -88,7 +88,9 @@ DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
 
 DEFAULT_MODELLI: dict[str, dict[str, Any]] = {
     # Ogni modello Gemini ha la sua quota giornaliera (per chiave): i ruoli sono distribuiti su modelli diversi, così
-    # nessuno si satura da solo, e il più nuovo (3.8 Flash) resta agli appunti, il lavoro più difficile.
+    # nessuno si satura da solo, e il più nuovo STABILE resta agli appunti, il lavoro più difficile.
+    # (3.8 e 3.7 Flash il 2026-10-03 davano 503 "alta domanda" su 7 richieste lunghe su 10: appena si stabilizzano
+    #  si possono rimettere agli appunti con `[modelli.notes] model = "gemini-3.8-flash"`.)
     # `riserva` = altro modello con quota separata, usato quando finisce quella principale.
     "trascrizione": {"provider": "gemini", "model": "gemini-3-flash-preview", "rpm": 10, "max_tokens": 65536,
                      "temperature": 0.0, "thinking": "low",
@@ -96,11 +98,11 @@ DEFAULT_MODELLI: dict[str, dict[str, Any]] = {
     "refiner": {"provider": "gemini", "model": "gemini-3.5-flash-lite", "rpm": 30,
                 "temperature": 0.1, "max_tokens": 8192, "tentativi": 3,
                 "riserva": {"provider": "gemini", "model": "gemini-3.1-flash-lite", "rpm": 30}},
-    "notes": {"provider": "gemini", "model": "gemini-3.8-flash", "rpm": 10,
+    "notes": {"provider": "gemini", "model": "gemini-3.6-flash", "rpm": 10,
               "temperature": 0.3, "top_p": 0.95, "max_tokens": 65536, "thinking": True,
-              "riserva": {"provider": "gemini", "model": "gemini-3.7-flash", "rpm": 10}},
-    "pdf": {"provider": "gemini", "model": "gemini-3.6-flash", "rpm": 10,
-            "riserva": {"provider": "gemini", "model": "gemini-3.5-flash", "rpm": 10}},
+              "riserva": {"provider": "gemini", "model": "gemini-3.5-flash", "rpm": 10}},
+    "pdf": {"provider": "gemini", "model": "gemini-3.5-flash", "rpm": 10,
+            "riserva": {"provider": "gemini", "model": "gemini-3-flash-preview", "rpm": 10}},
     # solo testo (niente visione): usato dal passo materiale quando anche la riserva è senza quota
     "pdf_testo": {"provider": "gemini", "model": "gemini-3.1-flash-lite", "rpm": 30, "temperature": 0.1,
                   "max_tokens": 8192, "workers": 4},

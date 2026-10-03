@@ -124,16 +124,25 @@ class Role:
         Una risposta troncata (finish_reason="length") è un errore: accettarla perderebbe contenuto in silenzio.
         Solo chi sa gestirla (es. la trascrizione, che divide l'audio) passa allow_truncated=True."""
         try:
-            return self._complete(messages, item, validate, allow_truncated, overrides)
+            res = self._complete(messages, item, validate, allow_truncated, overrides)
         except NeedsHuman:
             if not self.fallback_factory:
                 raise
-            with self._lock:
-                if self._fallback is None:
-                    self._fallback = self.fallback_factory()
-                    self.used_fallback = self._fallback.label
-            return self._fallback.complete(messages, item=item, validate=validate,
-                                           allow_truncated=allow_truncated, **overrides)
+            return self._use_fallback(messages, item, validate, allow_truncated, overrides)
+        if (not res.ok and res.error_kind in (ErrorKind.SERVER, ErrorKind.RATE_LIMIT) and self.fallback_factory):
+            # modello sovraccarico (503) o limitato dopo tutti i tentativi: per questo blocco si passa alla riserva,
+            # senza metterlo da parte per sempre (al blocco dopo si riprova col principale)
+            return self._use_fallback(messages, item, validate, allow_truncated, overrides)
+        return res
+
+    def _use_fallback(self, messages, item, validate, allow_truncated, overrides) -> LLMResult:
+        assert self.fallback_factory is not None
+        with self._lock:
+            if self._fallback is None:
+                self._fallback = self.fallback_factory()
+            self.used_fallback = self._fallback.label
+        return self._fallback.complete(messages, item=item, validate=validate,
+                                       allow_truncated=allow_truncated, **overrides)
 
     def _complete(self, messages, item, validate, allow_truncated, overrides) -> LLMResult:
         if self._fallback is not None and all(s.dead for s in self._slots):

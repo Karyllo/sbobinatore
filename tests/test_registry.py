@@ -99,3 +99,15 @@ def test_fallback_when_all_keys_out_of_quota(settings, monkeypatch):
     assert r.ok and r.model == "riserva-1" and role.used_fallback == "fake/riserva-1"
     r2 = role.complete([Message.user("y")])               # chiamate successive vanno dritte alla riserva
     assert r2.model == "riserva-1" and len(FakeProvider.calls) == 4
+
+
+
+def test_exhausted_server_errors_switch_to_fallback_for_that_item_only(registry):
+    server = LLMResult(error_kind=ErrorKind.SERVER, error="503")
+    # blocco 1: il principale dà 503 a tutti i tentativi → risponde la riserva; blocco 2: il principale è di nuovo usato
+    FakeProvider.script = [server, server, server, ok("da riserva\n" * 10), ok("da principale\n" * 10)]
+    role = registry.role("notes", {"riserva": {"provider": "fake", "model": "fake-riserva", "rpm": 1000}})
+    first = role.complete([Message.user("blocco 1")], item="b1")
+    assert "da riserva" in first.text and first.model == "fake-riserva" and role.used_fallback
+    second = role.complete([Message.user("blocco 2")], item="b2")
+    assert "da principale" in second.text and second.model == "fake-1"
