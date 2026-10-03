@@ -278,6 +278,8 @@ def test_archivio_source_writes_link_file_and_reuses_txt_path(settings, course_w
     FakeWebex(monkeypatch, {ID1: "2026-05-10 01:45:00"})
     rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
     assert rep.done == ["2026-05-08_prova_lab01"]                       # data e tipo dall'archivio
+    assert not (c.cartella / "link_archivio.txt").exists()             # simulazione: nessun file nel corso
+    download.run(StepContext(settings, c, quiet=True))                  # vero: il file resta
     text = (c.cartella / "link_archivio.txt").read_text()
     assert ID1 in text and "Laboratorio\tLab 3" in text                  # file riusabile a mano (fallback)
 
@@ -394,3 +396,16 @@ def test_force_with_legacy_manifest_key_keeps_the_old_stem(settings, course_with
     links(c, ID1)
     rep = download.run(StepContext(settings, c, quiet=True, force=True))
     assert rep.done == ["2025-09-17_prova_lez01"]
+
+
+def test_dry_run_with_archivio_source_does_not_create_course_folder(settings, monkeypatch):
+    from sbob.auth import recman
+    c = settings.corso("prova")
+    assert not c.cartella.exists()
+    c.sorgenti = [{"tipo": "archivio", "url": "https://aunicalogin.polimi.it/aunicalogin/getservizio.xml?id_servizio=2294&c_classe_webeep=1-STD"}]
+    rows = [{"webex": URL.format(ID1), "data": "08/05/2026 10:33", "forma": "Lezione", "argomento": ""}]
+    monkeypatch.setattr(recman, "collect", lambda entry, headless=True, log=None: rows)
+    FakeWebex(monkeypatch, {ID1: "2026-05-10 01:45:00"})
+    rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert rep.done == ["2026-05-08_prova_lez01"]
+    assert not c.cartella.exists()

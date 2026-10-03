@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -172,6 +173,12 @@ def source_links(ctx: StepContext, src: dict, idx: int) -> list[tuple[str, dict]
     if tipo == "archives":                           # vecchio tipo di prd per l'archivio: ora è `archivio`
         tipo, src = "archivio", {**src, "tipo": "archivio"}
     if tipo == "archivio":                           # → file di link arricchito, poi come una fonte txt
+        if ctx.dry_run:                              # simulazione: niente file nel corso, le righe si leggono da una cartella temporanea
+            with tempfile.TemporaryDirectory(prefix="sbob-archivio-") as tmp:
+                dst = archive_links(ctx, src, idx, Path(tmp))
+                ctx.log(f"download: leggo la fonte {idx + 1} (archivio)…")
+                links, meta = read_links_file(dst)
+            return [(u, meta.get(m.group(0).lower(), {}) if (m := _ID_RE.search(u)) else {}) for u in links]
         tipo, src = "txt", {"tipo": "txt", "file": str(archive_links(ctx, src, idx))}
     ctx.log(f"download: leggo la fonte {idx + 1} ({tipo})…")
     if tipo == "txt":
@@ -260,9 +267,10 @@ def try_renew_login(ctx: StepContext) -> bool:
     return bool(got.get("ticket"))
 
 
-def archive_links(ctx: StepContext, src: dict, idx: int = 0) -> Path:
+def archive_links(ctx: StepContext, src: dict, idx: int = 0, folder: Path | None = None) -> Path:
     """Fonte `archivio`: raccoglie i link dall'archivio recman (browser di `sbob login`) e li scrive in
-    <corso>/link_archivio.txt, nel formato di link.txt. Il file resta: si può controllare, correggere o riusare a mano."""
+    <corso>/link_archivio.txt, nel formato di link.txt. Il file resta: si può controllare, correggere o riusare a mano.
+    Con `folder` (simulazione) il file va lì invece che nel corso."""
     from sbob.auth.recman import archive_entries, collect, write_links
 
     course = ctx.course
@@ -279,7 +287,7 @@ def archive_links(ctx: StepContext, src: dict, idx: int = 0) -> Path:
     rows: list[dict] = []
     for e in entries:
         rows += collect(e, headless=True, log=ctx.log)
-    dst = course.cartella / ("link_archivio.txt" if idx == 0 else f"link_archivio_{idx + 1}.txt")
+    dst = (folder or course.cartella) / ("link_archivio.txt" if idx == 0 else f"link_archivio_{idx + 1}.txt")
     write_links(list({r["webex"]: r for r in rows}.values()), dst, "archivio recman")
     return dst
 

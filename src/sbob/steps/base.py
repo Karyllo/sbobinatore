@@ -60,6 +60,8 @@ class StepContext:
         import time
         try:
             lay = self.layout
+            if self.dry_run and not lay.logs.exists():
+                return                                                  # simulazione: non crea cartelle (né il corso) solo per il log
             lay.logs.mkdir(parents=True, exist_ok=True)
             path = lay.logs / "sbob.log"
             if path.exists() and path.stat().st_size > 2_000_000:          # rotazione semplice: un solo file vecchio
