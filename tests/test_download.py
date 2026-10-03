@@ -331,3 +331,21 @@ def test_topic_from_label():
     assert f("Lezione 3 parte 2 - 19-09-25") == "parte 2"
     assert f("Lez 5 - Limiti notevoli") == "Limiti notevoli" and "introduzione" in f("2025-09-19 Lez 01 - introduzione")
     assert f(None) is None and f("Registrazione") == "Registrazione"
+
+
+def test_asking_video_after_audio_downloads_the_missing_videos_with_same_names(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    fake = FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00", ID2: "2025-09-18 10:00:00"})
+    links(c, ID1, ID2)
+    download.run(StepContext(settings, c, quiet=True, options={"formato": "audio"}))
+    lay = Layout.of(c)
+    assert len(list(lay.audio.glob("*.mp3"))) == 2 and not lay.video.exists()
+    # senza chiedere il formato (config = video) con l'audio presente: fatto, nessuna chiamata
+    fake.info_calls.clear()
+    rep = download.run(StepContext(settings, c, quiet=True))
+    assert rep.done == [] and fake.info_calls == []
+    # esplicito: voglio il video → scarica i video con gli stessi nomi, senza rinumerare
+    rep = download.run(StepContext(settings, c, quiet=True, options={"formato": "video"}))
+    assert sorted(rep.done) == ["2025-09-17_prova_lez01", "2025-09-18_prova_lez02"]
+    assert sorted(p.stem for p in lay.video.glob("*.mp4")) == sorted(rep.done)
+    assert download.run(StepContext(settings, c, quiet=True, options={"formato": "video"})).done == []   # poi è fatto

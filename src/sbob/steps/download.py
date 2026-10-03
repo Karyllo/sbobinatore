@@ -287,6 +287,29 @@ def assign_names(course: Course, existing_stems: list[str], new: dict[str, str],
     return out
 
 
+def _missing_files(ctx: StepContext, found: dict[str, dict], videos: dict[str, str], formato: str) -> dict[str, str]:
+    """{id: stem} delle registrazioni già note a cui manca il file che si sta chiedendo.
+    - audio richiesto: va bene un audio oppure un video (l'audio si estrae);
+    - video richiesto ESPLICITAMENTE (--formato video) ma ci sono solo audio: si scarica il video con lo stesso nome;
+    - video da configurazione, con audio presente: si considera fatto (il video è stato tolto per risparmiare spazio)."""
+    lay = ctx.layout
+    video = {p.stem for p in list_inputs(lay.video, VIDEO_EXT)}
+    audio = {p.stem for p in list_inputs(lay.audio, AUDIO_EXT)}
+    explicit = ctx.options.get("formato") is not None
+    out = {}
+    for vid in found:
+        stem = videos.get(vid)
+        if not stem:
+            continue
+        if formato == "audio":
+            ok = stem in audio or stem in video
+        else:
+            ok = stem in video or (stem in audio and not explicit)
+        if not ok:
+            out[vid] = stem
+    return out
+
+
 def run(ctx: StepContext) -> StepReport:
     rep = ctx.report("download")
     lay, course = ctx.layout, ctx.course
@@ -309,8 +332,9 @@ def run(ctx: StepContext) -> StepReport:
         rep.notes.append("Nessuna registrazione trovata nelle fonti.")
         return rep
     videos = manifest.videos
-    unknown = [v for v in found if ctx.force or v not in videos]
-    rep.skipped = sorted(videos[v] for v in found if v in videos and not ctx.force)
+    redo = {} if ctx.force else _missing_files(ctx, found, videos, formato)      # note ma senza il file richiesto
+    unknown = [v for v in found if ctx.force or v not in videos or v in redo]
+    rep.skipped = sorted(videos[v] for v in found if v in videos and not ctx.force and v not in redo)
 
     # 2. informazioni Webex (data, link) solo per gli id non ancora noti
     infos: dict[str, webex.Recording | Exception] = {}
@@ -329,7 +353,7 @@ def run(ctx: StepContext) -> StepReport:
         if isinstance(info, Exception):
             rep.fail(vid[:8], str(info))
             continue
-        if not ctx.force and info.legacy_key in videos:       # già scaricata col vecchio downloader
+        if not ctx.force and vid not in redo and info.legacy_key in videos:   # già scaricata col vecchio downloader
             videos[vid] = videos[info.legacy_key]
             rep.skipped.append(videos[vid])
             relinked = True
@@ -340,9 +364,11 @@ def run(ctx: StepContext) -> StepReport:
 
     # numerazione dopo l'ultima lezione esistente, che sia stata scaricata come video o come audio
     existing = sorted({p.stem for p in list_inputs(lay.video, VIDEO_EXT) + list_inputs(lay.audio, AUDIO_EXT)})
+    fresh = {v: r for v, r in recs.items() if v not in redo}
     names = assign_names(course, existing,
-                         {v: tipo or found[v].get("tipo") or "lez" for v in recs},
-                         {v: found[v].get("data") or r.created for v, r in recs.items()})
+                         {v: tipo or found[v].get("tipo") or "lez" for v in fresh},
+                         {v: found[v].get("data") or r.created for v, r in fresh.items()})
+    names.update({v: redo[v] for v in recs if v in redo})       # già numerate: stesso nome, solo il file mancante
     if ctx.only:
         names = {v: s for v, s in names.items() if s in ctx.only}
     rep.skipped = sorted(set(rep.skipped))
