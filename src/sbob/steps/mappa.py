@@ -42,7 +42,8 @@ def parse_card(text: str) -> dict | None:
         if isinstance(c, dict) and str(c.get("nome", "")).strip() and not index.is_generic_concept(str(c["nome"])):
             concetti.append({"nome": str(c["nome"]).strip(),
                              "ruolo": "introdotto" if c.get("ruolo") == "introdotto" else "ripreso"})
-    prereq = [str(p).strip() for p in data.get("prerequisiti", []) if str(p).strip()][:5]
+    prereq = [str(p).strip() for p in data.get("prerequisiti", [])
+              if str(p).strip() and not index.is_generic_concept(str(p))][:5]
     return {"riassunto": data["riassunto"].strip(), "concetti": concetti[:10], "prerequisiti": prereq}
 
 

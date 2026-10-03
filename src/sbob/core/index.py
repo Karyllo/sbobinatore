@@ -44,6 +44,7 @@ def load_schede(course: Course) -> dict[str, dict[str, Any]]:
     schede = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     for card in schede.values():             # vale anche per le schede già fatte
         card["concetti"] = [c for c in card.get("concetti", []) if not is_generic_concept(c["nome"])]
+        card["prerequisiti"] = [p for p in card.get("prerequisiti", []) if not is_generic_concept(p)]
     return schede
 
 
