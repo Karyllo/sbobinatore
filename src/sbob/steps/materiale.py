@@ -271,6 +271,8 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
         rel = src.relative_to(lay.materiale).as_posix()
         if ctx.only and Path(rel).stem not in ctx.only:
             continue
+        if (folder := ctx.options.get("cartella")) and folder.lower() not in rel.lower():
+            continue                         # --cartella: solo i file il cui percorso contiene questo testo
         h = sha256(src)
         prev = manifest.materiale_conv.get(rel, {})
         out = lay.materiale_md / f"{rel}.md"

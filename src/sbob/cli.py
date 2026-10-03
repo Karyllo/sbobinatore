@@ -261,10 +261,11 @@ def materiale(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry
               as_json: JsonOpt = False,
               modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per la conversione dei PDF")] = None,
               converti: Annotated[Optional[bool], typer.Option("--converti/--senza-conversione",
-                  help="Converte in Markdown (default: [materiale] converti in sbob.toml, altrimenti sì).")] = None):
+                  help="Converte in Markdown (default: [materiale] converti in sbob.toml, altrimenti sì).")] = None,
+              cartella: Annotated[Optional[str], typer.Option(help="Converte solo i file il cui percorso contiene questo testo (es. Dispense): per dare la priorità quando la quota è poca.")] = None):
     """Scarica il materiale da WeBeep (nuovo o modificato) e lo converte in Markdown in <corso>/materiale_md/."""
     _emit([_run_step("materiale", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
-                     options={"modello": modello, "converti": converti})], as_json)
+                     options={"modello": modello, "converti": converti, "cartella": cartella})], as_json)
 
 
 webeep_app = typer.Typer(help="Corsi e materiale su WeBeep (serve `sbob login`).", no_args_is_help=True)

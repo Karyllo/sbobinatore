@@ -225,3 +225,14 @@ def test_conversion_can_be_disabled(settings):
     assert not mat.run(StepContext(settings, c, quiet=True)).done
     rep = mat.run(StepContext(settings, c, quiet=True, options={"converti": True}))   # --converti vince sulla config
     assert rep.done == ["A/x.txt.md"]
+
+
+def test_cartella_option_converts_only_matching_paths(wcourse, settings, monkeypatch):
+    client = FakeClient([RemoteFile("Lezioni", "", "s1.txt", "u1", 10, 100), RemoteFile("Esami", "", "tde 2024.txt", "u2", 20, 100)])
+    monkeypatch.setattr("sbob.webeep.client.WebeepClient", lambda token: client)
+    monkeypatch.setattr("sbob.auth.browser.load_token", lambda: "T")
+    lay = Layout.of(wcourse)
+    mat.run(StepContext(settings, wcourse, quiet=True, options={"cartella": "esami"}))      # maiuscole indifferenti
+    assert (lay.materiale_md / "Esami" / "tde 2024.txt.md").exists() and not (lay.materiale_md / "Lezioni").exists()
+    mat.run(StepContext(settings, wcourse, quiet=True))                                      # poi il resto
+    assert (lay.materiale_md / "Lezioni" / "s1.txt.md").exists()
