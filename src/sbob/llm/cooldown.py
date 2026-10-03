@@ -17,6 +17,7 @@ from sbob.config import CONFIG_HOME
 
 PATH = CONFIG_HOME / "quota.json"
 DEFAULT_WAIT = 30 * 60                      # senza indicazione dal provider (es. credito finito): si riprova tra 30 minuti
+MAX_WAIT = 2 * 3600                         # tetto prudente: un 429 non costa nulla, e se la quota torna prima non si blocca un modello disponibile
 _RETRY = re.compile(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
 
 
@@ -25,10 +26,11 @@ def slot_id(provider: str, model: str, key: str) -> str:
 
 
 def parse_wait(error_text: str | None) -> float:
-    """Secondi da aspettare dall'errore del provider; DEFAULT_WAIT se non c'è l'indicazione."""
+    """Secondi da aspettare dall'errore del provider (al massimo MAX_WAIT: un "retry in 16h" non va preso alla lettera,
+    meglio riscoprire la quota ogni due ore); DEFAULT_WAIT se non c'è l'indicazione."""
     if error_text and (m := _RETRY.search(error_text)) and any(m.groups()):
         h, mi, s = (float(x) if x else 0.0 for x in m.groups())
-        return max(60.0, h * 3600 + mi * 60 + s)
+        return min(MAX_WAIT, max(60.0, h * 3600 + mi * 60 + s))
     return DEFAULT_WAIT
 
 

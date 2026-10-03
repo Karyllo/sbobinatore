@@ -5,8 +5,9 @@ from sbob.llm.base import ErrorKind, LLMResult
 
 
 def test_parse_wait():
-    assert cooldown.parse_wait("... Please retry in 15h10m28.9s.'") == 15 * 3600 + 10 * 60 + 28.9
-    assert cooldown.parse_wait("retry in 1h45m26.2s") > 6300 and cooldown.parse_wait("retry in 45s") == 60      # minimo 1 minuto
+    assert cooldown.parse_wait("... Please retry in 15h10m28.9s.'") == cooldown.MAX_WAIT == 2 * 3600     # tetto di 2 ore
+    assert cooldown.parse_wait("retry in 1h45m26.2s") == 1 * 3600 + 45 * 60 + 26.2                       # sotto il tetto: invariato
+    assert cooldown.parse_wait("retry in 45s") == 60                                                     # minimo 1 minuto
     assert cooldown.parse_wait("402 Insufficient Balance") == cooldown.DEFAULT_WAIT and cooldown.parse_wait(None) == cooldown.DEFAULT_WAIT
 
 

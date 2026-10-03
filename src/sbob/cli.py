@@ -737,7 +737,7 @@ def modelli(as_json: JsonOpt = False,
 @app.command()
 def quota(azzera: Annotated[bool, typer.Option("--azzera", help="Dimentica i modelli senza quota (dopo una ricarica o l'arrivo di una nuova chiave).")] = False,
           as_json: JsonOpt = False):
-    """Modelli che hanno finito la quota e fra quanto si riprovano. sbob lo impara dagli errori: nessuna richiesta sprecata."""
+    """Modelli che hanno finito la quota e fra quanto si riprovano (al massimo 2 ore: un errore di quota non costa nulla, quindi sbob ricontrolla spesso). sbob lo impara dagli errori: nessuna richiesta sprecata."""
     from sbob.llm import cooldown
 
     if azzera:
