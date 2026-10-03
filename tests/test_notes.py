@@ -218,3 +218,40 @@ def test_format_models():
     assert pipeline.format_models(Counter({"a": 3})) == "a"
     assert pipeline.format_models(Counter({"b": 9, "a": 3})) == "a ×3, b ×9"
     assert pipeline.format_models(Counter(), "x") == "x"
+
+
+def _write_costs(lay, rows):
+    import json
+    lay.state.mkdir(parents=True, exist_ok=True)
+    lay.costs.write_text("\n".join(json.dumps({"role": "notes", "item": f"{STEM}#{i}", "model": m, "error": e})
+                                   for i, m, e in rows) + "\n")
+
+
+def test_verify_compares_header_with_logs_and_flags_reserve_lessons(settings):
+    from sbob.core import frontmatter
+    from sbob.core.verify import models_from_log, verify_course
+    c = settings.corso("prova")
+    lay = Layout.of(c)
+    lay.ensure("trascrizioni", "appunti")
+    (lay.trascrizioni / f"{STEM}.md").write_text("parola " * 600)
+    meta = frontmatter.lesson_meta(c, STEM, modello="principale-1")
+    (lay.appunti / f"{STEM}_appunti.md").write_text(frontmatter.join(meta, "testo " * 600))
+    # blocco 1: il principale fallisce per quota, poi risponde la riserva; blocchi 2 e 3: riserva
+    _write_costs(lay, [(1, "principale-1", "quota"), (1, "riserva-1", None), (2, "riserva-1", None), (3, "riserva-1", None)])
+    assert dict(models_from_log(lay)[STEM]) == {"riserva-1": 3}                        # conta l'accettata, non il tentativo
+    probs = [i["problema"] for i in verify_course(c, check_audio=False, primary_notes="principale-1")["problemi"]]
+    assert any("l'intestazione dice «principale-1» ma i log dicono «riserva-1»" in p for p in probs)
+    assert any("1 lezioni scritte per più della metà da riserva-1" in p for p in probs)
+    # intestazione veritiera e modello principale: nessun avviso
+    (lay.appunti / f"{STEM}_appunti.md").write_text(frontmatter.join({**meta, "modello": "principale-1"}, "testo " * 600))
+    _write_costs(lay, [(1, "principale-1", None), (2, "principale-1", None)])
+    assert not [i for i in verify_course(c, check_audio=False, primary_notes="principale-1")["problemi"]
+                if "intestazione" in i["problema"] or "scritte per più" in i["problema"]]
+
+
+def test_verify_skips_lessons_with_blocks_missing_from_the_log(settings):
+    from sbob.core.verify import models_from_log
+    c = settings.corso("prova")
+    lay = Layout.of(c)
+    _write_costs(lay, [(1, "m", None), (3, "m", None)])                                 # il blocco 2 veniva dalla cache
+    assert models_from_log(lay) == {}

@@ -142,6 +142,7 @@ I modelli escono in fretta e ognuno è un compromesso tra qualità, stabilità d
 
 ### Qualità
 - `sbob verifica [<slug>] --json` segnala:
+  - lezioni scritte in prevalenza da una riserva e non dal modello principale, e intestazioni `modello:` che non corrispondono ai log: informazione sulla qualità, da riferire all'utente (non rifare da solo: costa quota). L'intestazione `modello:` è veritiera: citala com'è;
   - appunti molto più corti della trascrizione, cioè contenuto perso;
   - trascrizioni troncate rispetto alla durata dell'audio;
   - loop di ripetizione;

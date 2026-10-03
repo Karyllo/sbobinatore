@@ -399,7 +399,8 @@ def verifica(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso
     except ConfigError as e:
         err.print(f"[red]{e}[/red]")
         raise typer.Exit(Exit.ERROR)
-    data = [verify_course(c, check_audio=not senza_audio) for c in targets if c.cartella.exists()]
+    primary = (s.modelli.get("notes") or {}).get("model")
+    data = [verify_course(c, check_audio=not senza_audio, primary_notes=primary) for c in targets if c.cartella.exists()]
     if as_json:
         sys.stdout.write(json.dumps(data[0] if corso and data else data, ensure_ascii=False, indent=2) + "\n")
     else:
