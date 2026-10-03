@@ -82,7 +82,7 @@ Puoi lanciare anche un solo passo: `sbob audio|trascrivi|appunti|mappa <slug> [-
 
 **Riserva sempre valida: il file di link.** `link.txt` (o `link_archivio.txt`), una riga per registrazione: `link Webex` oppure `link<TAB>dd/mm/yyyy HH:MM<TAB>forma<TAB>argomento`. Le righe con `#` sono commenti. Funziona anche quando l'automazione non va.
 
-**Ultima riserva: Claude in Chrome**, solo con il consenso dell'utente e in sola lettura, se `sbob link` non funziona:
+**Ultima riserva: il browser dell'agente** (Claude in Chrome, o quello di Antigravity), solo con il consenso dell'utente e in sola lettura, se `sbob link` non funziona:
 1. apri il link dell'archivio da WeBeep;
 2. con `javascript_tool` carica la vista "tutte" (`a.paginator_link` con `action=plen_0`) e leggi `td[1]` = data, `td[3]` = forma, `td[4]` = argomento, `td[0] a.Link` = "Riproduci"; salva l'elenco in `sessionStorage`;
 3. per ogni riga imposta `location.href` su "Riproduci", aspetta e leggi con `tabs_context_mcp` l'URL Webex finale; per tornare riapri il link dell'archivio ("indietro" non funziona);
@@ -113,6 +113,7 @@ Un corso può avere edizioni passate (stesso docente) in `<corso>/archivio/<anno
 - Riassunto del corso: leggi `mappa/INDICE.md`.
 - Un file unico da caricare su NotebookLM o da dare a un LLM: `sbob merge <slug> --modo monolite --json`. Esce in `merge/`.
 - Temi d'esame: `sbob merge <slug> --modo tde --da materiale --json`.
+- **Domande al taccuino:** `sbob notebook <slug> chiedi "domanda" --json` → `risposta` e `sorgenti` (nomi leggibili: Appunti, Mappa, Materiali — …). Usalo per domande d'insieme o che incrociano appunti e materiale ("cosa serve sapere prima di X", "che esercizi d'esame ci sono su Y"). Per le domande precise preferisci gli appunti locali (`sbob cerca`, poi apri la sezione): su un corpus grande il taccuino è ottimo per la struttura ma può impoverire i dettagli. Cita sempre lezione e data. La conversazione del taccuino continua tra una domanda e l'altra.
 - Taccuino NotebookLM del corso, sempre aggiornato (appunti e materiale, una sorgente per cartella; le trascrizioni no): `sbob notebook <slug> --json` (anteprima: `--dry-run`). Con `needs_human` e azione `notebooklm login` serve l'utente. Anni passati solo a comando: `sbob notebook <slug> aggiungi-archivio <anno>`. Non toccare le sorgenti aggiunte a mano.
 - Scegliere i corsi da sincronizzare spetta all'utente (`sbob webeep scegli`, elenco a spunte). Da script: `sbob webeep scegli --id <id>`. Tutti i corsi scelti in una volta: `sbob aggiorna --json`. L'aggiornamento notturno (`sbob pianifica`) lo installa l'utente: non installarlo né rimuoverlo tu senza che lo chieda.
 - PDF di slide o dispense in Markdown: `sbob pdf <file|cartella> --corso <slug> --json`. Esce in `.sbob/md/` e da lì si trova con `cerca --in materiale`.

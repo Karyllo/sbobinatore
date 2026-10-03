@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sys
+from pathlib import Path
 from typing import Annotated, Any, Optional
 
 import typer
@@ -17,6 +18,7 @@ from rich.console import Console
 from rich.table import Table
 
 from sbob.config import ConfigError, Settings, load_settings
+from sbob.core.layout import Layout
 from sbob.core.report import Exit, NeedsHuman, QuotaExhausted, StepReport
 from sbob.steps.base import PIPELINE, StepContext, get_step
 
@@ -515,6 +517,38 @@ def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt 
     raise typer.Exit(worst)
 
 
+def _notebook_ask(corso: str, question: str, as_json: bool) -> None:
+    from sbob import notebooklm_cli
+    from sbob.core.manifest import Manifest
+
+    s = _settings()
+    try:
+        course = s.corso(corso)
+        if not question.strip():
+            raise ValueError('Scrivi la domanda: sbob notebook <corso> chiedi "…"')
+        state = Manifest(Layout.of(course).manifest).notebook
+        if not state.get("id"):
+            raise ValueError(f"Il corso non ha ancora un taccuino: sbob notebook {corso}")
+        ans = notebooklm_cli.ask(state["id"], question)
+    except NeedsHuman as e:
+        _emit([StepReport(step="notebook", corso=corso, needs_human=str(e), action=e.action)], as_json)
+        return
+    except (ConfigError, ValueError, RuntimeError) as e:
+        _emit([StepReport(step="notebook", corso=corso, error=str(e))], as_json)
+        return
+    titles = {v["id"]: t for t, v in state.get("sources", {}).items()}       # id sorgente → nome leggibile
+    sources = sorted({str(titles.get(r.get("source_id", ""), r.get("source_id") or "?")) for r in ans["riferimenti"]
+                      if isinstance(r, dict)})
+    if as_json:
+        sys.stdout.write(json.dumps({"corso": corso, "domanda": question, "risposta": ans["risposta"],
+                                     "sorgenti": sources, "riferimenti": len(ans["riferimenti"])},
+                                    ensure_ascii=False, indent=2) + "\n")
+        return
+    out.print(ans["risposta"])
+    if sources:
+        err.print("\n[dim]Sorgenti: " + ", ".join(sources) + "[/dim]")
+
+
 @app.command()
 def pianifica(ora: Annotated[str, typer.Option("--ora", help="HH:MM")] = "03:00",
               rimuovi: Annotated[bool, typer.Option("--rimuovi", help="Toglie l'aggiornamento automatico.")] = False,
@@ -536,10 +570,14 @@ def pianifica(ora: Annotated[str, typer.Option("--ora", help="HH:MM")] = "03:00"
 
 
 @app.command()
-def notebook(corso: str, azione: Annotated[Optional[str], typer.Argument(help="aggiungi-archivio | rimuovi-archivio (vuoto = aggiorna il taccuino)")] = None,
-             anno: Annotated[Optional[str], typer.Argument(help="Anno dell'edizione, es. 2024-25.")] = None,
+def notebook(corso: str, azione: Annotated[Optional[str], typer.Argument(help="aggiungi-archivio | rimuovi-archivio | chiedi (vuoto = aggiorna il taccuino)")] = None,
+             anno: Annotated[Optional[str], typer.Argument(help="Anno dell'edizione (es. 2024-25), oppure la domanda per `chiedi`.")] = None,
              force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False):
-    """Tiene aggiornato il taccuino NotebookLM del corso (appunti e materiale, una sorgente per cartella)."""
+    """Tiene aggiornato il taccuino NotebookLM del corso (appunti, mappa, una sorgente per cartella di materiale).
+    `sbob notebook <corso> chiedi "domanda"` lo interroga e restituisce la risposta con le sorgenti citate."""
+    if azione == "chiedi":
+        _notebook_ask(corso, anno or "", as_json)
+        return
     _emit([_run_step("notebook", corso, force=force, dry_run=dry_run, quiet=as_json,
                      options={"azione": azione, "anno": anno, "esplicito": True})], as_json)
 
@@ -609,9 +647,18 @@ def login(rinnova: Annotated[bool, typer.Option("--rinnova", help="Senza finestr
     _emit([rep], as_json)
 
 
+SKILL_TARGETS = {
+    "claude": Path.home() / ".claude" / "skills",                              # Claude Code
+    "antigravity": Path.home() / ".gemini" / "config" / "skills",             # Antigravity (IDE e 2.0)
+    "antigravity-cli": Path.home() / ".gemini" / "antigravity-cli" / "skills",  # Antigravity CLI (diventa /sbobinatore)
+}
+
+
 @app.command("installa-skill")
-def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascrive una skill già presente.")] = False):
-    """Installa la skill per Claude Code in ~/.claude/skills/sbobinatore (così Claude sa usare sbob)."""
+def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascrive una skill già presente.")] = False,
+                   per: Annotated[str, typer.Option("--per", help="claude | antigravity | antigravity-cli")] = "claude"):
+    """Installa la skill (così l'agente sa usare sbob): Claude Code, Antigravity o Antigravity CLI. Stesso SKILL.md.
+    Da un clone del repo crea un collegamento (si aggiorna da sola), da un pacchetto installato una copia."""
     import shutil
     from pathlib import Path
 
@@ -622,7 +669,10 @@ def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascr
     if src is None:
         err.print("[red]SKILL.md non trovato nel pacchetto.[/red]")
         raise typer.Exit(Exit.ERROR)
-    dst = Path.home() / ".claude" / "skills" / "sbobinatore"
+    if per not in SKILL_TARGETS:
+        err.print(f"[red]--per deve essere uno di: {', '.join(SKILL_TARGETS)}[/red]")
+        raise typer.Exit(Exit.ERROR)
+    dst = SKILL_TARGETS[per] / "sbobinatore"
     if dst.exists() or dst.is_symlink():
         if dst.resolve() == src.resolve():
             err.print(f"Skill già collegata: {dst} → {src}")
@@ -632,8 +682,11 @@ def installa_skill(force: Annotated[bool, typer.Option("--force", help="Sovrascr
             raise typer.Exit(Exit.ERROR)
         shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(src, dst)
-    err.print(f"[green]Skill installata in {dst}.[/green] Riavvia Claude Code per vederla.")
+    if (pkg.parents[1] / "skills" / "sbobinatore").resolve() == src.resolve():
+        dst.symlink_to(src.resolve(), target_is_directory=True)        # clone del repo: collegamento, segue le modifiche
+    else:
+        shutil.copytree(src, dst)                                       # pacchetto installato: copia (rilancia con --force dopo un aggiornamento)
+    err.print(f"[green]Skill installata in {dst}.[/green] Riavvia {'Claude Code' if per == 'claude' else 'Antigravity'} per vederla.")
 
 
 @app.command("archivio")

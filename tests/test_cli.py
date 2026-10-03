@@ -122,3 +122,12 @@ def test_chain_continues_after_quota_but_stops_on_login(settings, monkeypatch):
     assert [r.step for r in reps] == ["audio", "trascrivi", "appunti"]                 # "mappa" non parte: serve il login
     assert reps[0].done == ["lez01"] and reps[0].quota and reps[0].needs_human
     assert reps[2].needs_human and not reps[2].quota
+
+
+def test_installa_skill_for_antigravity_links_from_repo(tmp_path, monkeypatch):
+    from sbob import cli
+    monkeypatch.setitem(cli.SKILL_TARGETS, "antigravity", tmp_path / "ag" / "skills")
+    r = runner.invoke(app, ["installa-skill", "--per", "antigravity"])
+    dst = tmp_path / "ag" / "skills" / "sbobinatore"
+    assert r.exit_code == 0 and (dst / "SKILL.md").exists() and dst.is_symlink()          # dal clone: collegamento
+    assert runner.invoke(app, ["installa-skill", "--per", "boh"]).exit_code != 0

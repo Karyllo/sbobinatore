@@ -80,6 +80,19 @@ def set_persona(notebook: str, text: str) -> None:
     _run("configure", "-n", notebook, "--persona", text, "--json")
 
 
+def ask(notebook: str, question: str) -> dict:
+    """Domanda al taccuino: {"risposta", "riferimenti": [{"source_id", ...}]}. Il testo passa da stdin (`--prompt-file -`),
+    non sulla riga di comando. Continua la conversazione in corso del taccuino (mai `--new`, che la cancella)."""
+    res = subprocess.run(["notebooklm", "ask", "--prompt-file", "-", "-n", notebook, "--json"],
+                         input=question, capture_output=True, text=True)
+    check_auth(res.stderr, res.returncode, res.stdout)
+    data = parse_json(res.stdout)
+    if res.returncode != 0 or data.get("error"):
+        raise RuntimeError(f"notebooklm ask: {data.get('message') or res.stderr.strip() or 'errore'}")
+    refs = data.get("references") or data.get("citations") or []
+    return {"risposta": data.get("answer") or data.get("response") or "", "riferimenti": refs}
+
+
 def auth_status() -> tuple[bool, str]:
     """(ok, dettaglio) per `sbob doctor`."""
     try:

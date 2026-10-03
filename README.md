@@ -36,9 +36,12 @@ Funziona su macOS e Linux. Serve una volta sola.
    ```
    `sbob init` chiede la cartella dei corsi, il modello per gli appunti e le chiavi API. Le chiavi restano solo sul tuo computer. `sbob doctor` controlla che non manchi niente e, se manca qualcosa, ti dà il comando per sistemarlo.
 
-Se usi Claude Code, aggiungi anche la skill, così Claude sa usare sbob e navigare i tuoi appunti:
+Se usi un agente, aggiungi anche la skill, così sa usare sbob e navigare i tuoi appunti (stesso `SKILL.md` per entrambi):
 ```bash
-sbob installa-skill
+sbob installa-skill                       # Claude Code
+```
+```bash
+sbob installa-skill --per antigravity     # Antigravity (IDE); --per antigravity-cli per la CLI, dove diventa /sbobinatore
 ```
 
 ### Chiavi API
