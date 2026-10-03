@@ -113,7 +113,9 @@ class Role:
                 if not slot.dead:
                     return slot
         raise QuotaExhausted(f"Quota esaurita su tutte le chiavi di {self.provider_name} ({self.name})",
-                             action="aspetta il reset della quota (di solito alle 9:00 italiane per Google) o aggiungi chiavi/credito")
+                             action=("aspetta il reset della quota giornaliera (Google: di solito alle 9:00 italiane) o aggiungi altre chiavi"
+                                     if self.provider_name == "gemini" else
+                                     f"ricarica il credito di {self.provider_name} (saldo insufficiente) o scegli un altro modello"))
 
     def complete(self, messages: list[Message], item: str | None = None,
                  validate=None, allow_truncated: bool = False, **overrides: Any) -> LLMResult:
