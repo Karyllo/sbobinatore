@@ -349,3 +349,22 @@ def test_asking_video_after_audio_downloads_the_missing_videos_with_same_names(s
     assert sorted(rep.done) == ["2025-09-17_prova_lez01", "2025-09-18_prova_lez02"]
     assert sorted(p.stem for p in lay.video.glob("*.mp4")) == sorted(rep.done)
     assert download.run(StepContext(settings, c, quiet=True, options={"formato": "video"})).done == []   # poi è fatto
+
+
+def test_missing_link_txt_is_only_a_note_when_other_sources_work(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    (c.cartella / "link.txt").unlink()
+    page = f'<a href="{URL.format(ID1)}">uno</a>'
+
+    class R:
+        status_code, text = 200, page
+    import requests
+    monkeypatch.setattr(requests, "get", lambda *a, **k: R())
+    FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00"})
+    c.sorgenti = [{"tipo": "webpage-url", "url": "https://prof.example"}, {"tipo": "txt", "file": "link.txt"}]
+    rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
+    assert rep.done == ["2025-09-17_prova_lez01"] and not rep.warnings and rep.exit_code == 0
+    assert any("facoltativo" in n for n in rep.notes)
+    c.sorgenti = [{"tipo": "txt", "file": "link.txt"}]                  # unica fonte: allora serve davvero
+    with pytest.raises(NeedsHuman):
+        download.run(StepContext(settings, c, dry_run=True, quiet=True))

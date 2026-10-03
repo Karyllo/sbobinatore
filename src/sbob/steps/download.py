@@ -96,11 +96,15 @@ def read_links_file(path: Path) -> tuple[list[str], dict[str, dict]]:
     return links, meta
 
 
+class LinkFileMissing(NeedsHuman):
+    """Il file di link (link.txt) non c'è: se ci sono altre fonti che funzionano non è un problema, era solo la riserva."""
+
+
 def _links_file(course: Course, src: dict, options: dict) -> Path:
     file = Path(options.get("links") or src.get("file", "link.txt")).expanduser()
     file = file if file.is_absolute() else course.cartella / file
     if not file.is_file():
-        raise NeedsHuman(f"File link non trovato: {file}", action=f"crea {file} con un link Webex per riga")
+        raise LinkFileMissing(f"File link non trovato: {file}", action=f"crea {file} con un link Webex per riga")
     return file
 
 
@@ -215,6 +219,13 @@ def gather(ctx: StepContext, rep: StepReport) -> tuple[dict[str, dict], list[str
         label = f"fonte {idx + 1} ({src.get('tipo')})"
         try:
             links = source_links(ctx, src, idx)
+        except LinkFileMissing as e:
+            if len(sources) > 1:                      # è la riserva: se le altre fonti funzionano basta una nota
+                rep.notes.append(f"{label}: nessun {Path(src.get('file', 'link.txt')).name} (è facoltativo: serve solo se le altre fonti non bastano)")
+                continue
+            problems.append(f"{label}: {e}")
+            first_error = first_error or e
+            continue
         except (NeedsHuman, RuntimeError) as e:
             problems.append(f"{label}: {e}")
             first_error = first_error or e
