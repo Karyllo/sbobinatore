@@ -208,7 +208,7 @@ Fino al 2026-10-02 il download passava da prd (polimi_recordings_downloader di P
 ## Installazione (fatta il 2026-10-02)
 - Skill: symlink `~/.claude/skills/sbobinatore` → `skills/sbobinatore`. Le modifiche al file valgono subito.
 - CLI: `uv tool install -e ".[gemini,openai,anthropic,pdf,html]"`, eseguibile in `~/.local/bin/sbob` (editable, segue il repo). Se si aggiungono dipendenze, rilanciare lo stesso comando.
-- **Manca la config globale** `~/.config/sbob/sbob.toml`: da fuori dal repo `sbob corsi` non vede corsi. Va scritta con l'utente (i path dei corsi veri), senza migrare dati.
+- **Config: solo quella globale** `~/.config/sbob/sbob.toml` (dal 2026-10-03; la copia `./sbob.toml` del repo è stata tolta, i corsi di prova `prova/edp/fro/fis` rimossi dalla config ma le loro cartelle `_prova*` restano su disco). Chiavi: `~/.config/sbob/.env` è un collegamento allo stesso `.env` di "sbobine universitarie copy". `root` è ancora il repo: i dati stanno accanto al codice (attenzione a `git clean -fdx`); spostarli è la migrazione, ultima e su richiesta.
 
 ## Installazione "plug and play" e pubblicazione
 - Downloader: `downloader` in sbob.toml può essere un clone con `.venv`, oppure una cartella o un indirizzo git. In questi ultimi casi `uv run --no-project --with <spec> python -m prd`.
