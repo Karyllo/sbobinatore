@@ -506,7 +506,7 @@ def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt 
             err.print(f"[bold]── {slug}[/bold]")
         rs = _run_chain(slug, PIPELINE, force=force, dry_run=dry_run, as_json=as_json)
         reports += rs
-        if any(r.exit_code == Exit.HUMAN for r in rs):      # login scaduto & co: inutile insistere sugli altri corsi
+        if any(r.exit_code == Exit.HUMAN and not r.quota for r in rs):   # login scaduto & co: inutile insistere sugli altri corsi
             break
     worst = int(max(r.exit_code for r in reports))
     if notifica and worst:

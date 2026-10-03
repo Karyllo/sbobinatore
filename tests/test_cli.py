@@ -1,5 +1,6 @@
 """Contratto per gli agenti: con --json stdout è SOLO un oggetto JSON; l'exit code dice cosa è successo."""
 
+import dataclasses
 import json
 import shutil
 import subprocess
@@ -131,3 +132,31 @@ def test_installa_skill_for_antigravity_links_from_repo(tmp_path, monkeypatch):
     dst = tmp_path / "ag" / "skills" / "sbobinatore"
     assert r.exit_code == 0 and (dst / "SKILL.md").exists() and dst.is_symlink()          # dal clone: collegamento
     assert runner.invoke(app, ["installa-skill", "--per", "boh"]).exit_code != 0
+
+
+def test_aggiorna_continues_with_next_course_after_quota_but_stops_on_login(settings, monkeypatch):
+    from sbob import cli
+    from sbob.core.report import StepReport
+    s = settings
+    s.corsi["prova"].webeep_id = 1
+    other = dataclasses.replace(s.corsi["prova"], slug="altro", webeep_id=2)
+    s.corsi["altro"] = other
+    monkeypatch.setattr(cli, "_settings", lambda: s)
+    monkeypatch.setattr("sbob.core.models.check", lambda st: {"avvisi": [], "nota": None})
+    calls: list[str] = []
+
+    def chain(corso, steps, **kw):
+        calls.append(corso)
+        if corso == "prova":      # A: quota finita
+            return [StepReport(step="appunti", corso=corso, needs_human="quota", quota=True)]
+        return [StepReport(step="appunti", corso=corso)]
+
+    monkeypatch.setattr(cli, "_run_chain", chain)
+    runner.invoke(app, ["aggiorna", "--json"])
+    assert calls == ["prova", "altro"]                      # la quota di A non ferma B
+
+    calls.clear()
+    monkeypatch.setattr(cli, "_run_chain", lambda corso, steps, **kw: calls.append(corso) or
+                        [StepReport(step="download", corso=corso, needs_human="login scaduto", action="sbob login")])
+    runner.invoke(app, ["aggiorna", "--json"])
+    assert calls == ["prova"]                               # un login scaduto sì
