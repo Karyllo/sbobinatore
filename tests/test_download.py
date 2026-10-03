@@ -409,3 +409,20 @@ def test_dry_run_with_archivio_source_does_not_create_course_folder(settings, mo
     rep = download.run(StepContext(settings, c, dry_run=True, quiet=True))
     assert rep.done == ["2026-05-08_prova_lez01"]
     assert not c.cartella.exists()
+
+
+def test_recording_without_date_is_skipped_with_a_clear_failure(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    fake = FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00", ID2: "2025-09-18 10:00:00"})
+    orig = fake.recordings
+
+    def no_date(ids, http, workers=8):
+        out = orig(ids, http, workers)
+        out[ID2].created = datetime.min                        # Webex non ha dato la data
+        return out
+    monkeypatch.setattr(download.webex, "recordings", no_date)
+    links(c, ID1, ID2)
+    rep = download.run(StepContext(settings, c, quiet=True))
+    assert rep.done == ["2025-09-17_prova_lez01"]
+    assert [f.item for f in rep.failed] == [ID2[:8]] and "senza data" in rep.failed[0].error
+    assert not list(Layout.of(c).video.glob("0001*"))

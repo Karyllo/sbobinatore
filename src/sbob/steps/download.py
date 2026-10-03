@@ -388,6 +388,10 @@ def run(ctx: StepContext) -> StepReport:
     # numerazione dopo l'ultima lezione esistente, che sia stata scaricata come video o come audio
     existing = sorted({p.stem for p in list_inputs(lay.video, VIDEO_EXT) + list_inputs(lay.audio, AUDIO_EXT)})
     fresh = {v: r for v, r in recs.items() if v not in redo}
+    for v in [v for v, r in fresh.items() if (found[v].get("data") or r.created) <= datetime.min.replace(year=1900)]:
+        rep.fail(v[:8], "registrazione senza data (né dalla fonte né da Webex): non la numero, un nome come "
+                        "0001-01-01_… sarebbe sbagliato; aggiungi la data in link.txt")
+        del fresh[v], recs[v]
     names = assign_names(course, existing,
                          {v: tipo or found[v].get("tipo") or "lez" for v in fresh},
                          {v: found[v].get("data") or r.created for v, r in fresh.items()})
