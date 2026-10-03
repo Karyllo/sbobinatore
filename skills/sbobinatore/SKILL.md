@@ -117,6 +117,17 @@ Un corso può avere edizioni passate (stesso docente) in `<corso>/archivio/<anno
 - Scegliere i corsi da sincronizzare spetta all'utente (`sbob webeep scegli`, elenco a spunte). Da script: `sbob webeep scegli --id <id>`. Tutti i corsi scelti in una volta: `sbob aggiorna --json`. L'aggiornamento notturno (`sbob pianifica`) lo installa l'utente: non installarlo né rimuoverlo tu senza che lo chieda.
 - PDF di slide o dispense in Markdown: `sbob pdf <file|cartella> --corso <slug> --json`. Esce in `.sbob/md/` e da lì si trova con `cerca --in materiale`.
 
+### Lavori lunghi: non farti aspettare, non aspettare l'utente
+Un corso intero richiede ore (trascrizione, appunti, conversione). Regole per portarlo a termine da solo:
+- **Lancia in background** e dai all'utente una stima onesta ("circa 5 minuti a lezione, 30 lezioni ≈ 2 ore"). Non restare a guardare e non rispondere "sto lavorando" senza dati: controlla il progresso (`sbob status <slug> --json`) e riferisci numeri.
+- **Mettiti una sveglia per ogni tappa, non solo per la fine.** Chiedere "ti avviso quando finisce" non basta se la catena ha più passi (appunti → mappa → taccuino): controlla alla fine di ciascun passo o programma un controllo (monitor sul processo, o un promemoria all'ora del reset della quota). Se l'utente deve accorgersi lui di una tappa finita, è un tuo errore.
+- **Quota finita = si riprende, non si abbandona.** Leggi `sbob quota --json` per sapere quando tornano i modelli (Google: verso le 2:00 italiane), programma la ripartenza a quell'ora e rilancia: il lavoro già fatto non si perde (cache dei blocchi, passi idempotenti).
+- **Un solo processo alla volta per corso.** Due comandi che scrivono lo stesso `.sbob/manifest.json` si sovrascrivono: lancia il taccuino dopo che appunti e mappa hanno finito, non in parallelo.
+- **Se qualcosa non torna, guardalo prima di dire "ok":** conta i file prodotti, leggi l'ultima riga del log (`<corso>/.sbob/logs/sbob.log`), non fidarti dell'ultima riga di un output troncato (un errore su 11 file sembra uno solo).
+- **Dati di altri studenti:** i file con "Esiti", "Risultati" o "Graduatoria" nel nome (liste di matricole e voti) sbob non li converte né li manda al taccuino. Non aggirarlo.
+- **Cosa va al taccuino:** appunti, una sorgente "Mappa" (riassunti, concetti, prerequisiti; senza link locali) e una sorgente per cartella di materiale. Non le trascrizioni, non `concetti/`, non `INDICE.md` com'è.
+- **Timestamp:** l'utente non li vuole; non riproporli.
+
 ### Modelli e quota (te ne accorgi tu, l'utente non deve inseguire i provider)
 I modelli escono in fretta e ognuno è un compromesso tra qualità, stabilità dell'output e richieste al giorno (sul Gemini gratuito: 20 per modello). Per questo sbob **non cambia mai modello da solo** e l'utente non deve seguire le novità: se ne accorge sbob, tu lo riferisci.
 - **Quando controllare:** all'inizio di una sessione di lavoro sui corsi, dopo un errore di quota o 503, e quando l'utente chiede "come vanno i modelli". Comando: `sbob modelli --json` (gratis, non consuma quota). Se `avvisi` non è vuoto, **dillo all'utente** in italiano e in poche righe: cosa è uscito o cosa sta per sparire, per quale ruolo, e che un modello più nuovo non è per forza migliore (output diverso, quota diversa, i nuovi sono spesso sovraccarichi).
