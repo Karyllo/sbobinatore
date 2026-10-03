@@ -25,6 +25,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 
+from sbob.config import install_command
 from sbob.core import frontmatter
 from sbob.core.batch import atomic_write_text, list_tree
 from sbob.core.report import NeedsHuman, StepReport
@@ -362,7 +363,7 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
                                 text = _office_to_text(src)
                                 if text is None:
                                     rep.fail(rel, "serve LibreOffice (`brew install --cask libreoffice`) o "
-                                                  "l'extra office (`uv tool install --reinstall \"sbobinatore[all,office]\"`)")
+                                                  f"l'extra office (`{install_command('pdf', 'office')}`)")
                                     continue
                                 atomic_write_text(out, frontmatter.join({**meta, "conversione": "testo-office"}, text))
                                 manifest.materiale_conv[rel] = {"sha": h, "conv": "testo-office"}

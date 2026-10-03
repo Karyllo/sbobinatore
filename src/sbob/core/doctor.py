@@ -11,7 +11,7 @@ import platform
 import shutil
 from typing import Any
 
-from sbob.config import Settings
+from sbob.config import Settings, install_command
 from sbob.core.keys import load_keys
 
 _SDK = {"gemini": ("google.genai", "gemini"), "openai": ("openai", "openai"), "anthropic": ("anthropic", "anthropic")}
@@ -35,11 +35,11 @@ def _brew(pkg: str) -> str:
 
 def check_binaries() -> list[dict]:
     out = []
-    for name, pkg, why in (("ffmpeg", "ffmpeg", "audio e divisione degli audio lunghi"),
-                           ("ffprobe", "ffmpeg", "durata degli audio"),
-                           ("aria2c", "aria2", "download delle registrazioni")):
+    for name, pkg, why, opt in (("ffmpeg", "ffmpeg", "audio e divisione degli audio lunghi", False),
+                                ("ffprobe", "ffmpeg", "durata degli audio", False),
+                                ("aria2c", "aria2", "facoltativo: senza, le registrazioni si scaricano comunque, solo più piano", True)):
         path = shutil.which(name)
-        out.append(_check(name, bool(path), path or why, _brew(pkg)))
+        out.append(_check(name, bool(path), path or why, _brew(pkg), opzionale=opt))
     return out
 
 
@@ -74,12 +74,11 @@ def check_models(settings: Settings) -> list[dict]:
         out.append(_check(f"chiavi {provider}", n > 0, f"{n} chiavi {prefix}_* · ruoli: {', '.join(roles)}",
                           f"aggiungi {prefix}_ACCOUNT1=... nel .env accanto a sbob.toml (oppure sbob init)"))
         module, extra = _SDK.get(pconf.get("tipo", ""), (None, None))
-        if module:
-            out.append(_check(f"libreria {extra}", _has(module), module,
-                              f'uv tool install --reinstall "sbobinatore[{extra}]" (o "sbobinatore[all]")'))
+        if module and extra:
+            out.append(_check(f"libreria {extra}", _has(module), module, install_command(extra)))
     if "pdf" in settings.modelli:
         out.append(_check("libreria pdf", _has("pymupdf"), "pymupdf (per sbob pdf)",
-                          'uv tool install --reinstall "sbobinatore[pdf]"', opzionale=True))
+                          install_command("pdf"), opzionale=True))
     return out
 
 
@@ -138,7 +137,7 @@ def check_login() -> list[dict]:
                   "rinnovo automatico di ticket e cookie" if PROFILE_DIR.exists() else "mai eseguito `sbob login`",
                   "sbob login", opzionale=True),
            _check("playwright", _has("playwright"), "per sbob login",
-                  'uv tool install --reinstall "sbobinatore[all]"', opzionale=True)]
+                  install_command("login"), opzionale=True)]
     return out
 
 

@@ -17,11 +17,10 @@ from sbob.core.naming import slugify
 
 # Preset per gli appunti: (provider, modello, parametri, prefisso chiavi, riserva)
 PRESETS: dict[str, dict[str, Any]] = {
-    "gemini": {"label": "Gemini (gratuito con limiti, ~1 lezione/giorno per chiave)",
-               "notes": {"provider": "gemini", "model": "gemini-3.5-flash", "rpm": 10, "workers": 4,
-                         "temperature": 0.3, "top_p": 0.95, "max_tokens": 65536, "thinking": True},
-               "riserva": {"provider": "deepseek", "model": "deepseek-v4-pro", "rpm": 200, "thinking": False,
-                           "workers": 8}},
+    # Gemini usa i default di sbob (DEFAULT_MODELLI): ruoli distribuiti su modelli diversi con riserve, tutti Gemini.
+    # Quindi basta UNA chiave (niente DeepSeek) e nel file di configurazione non si scrive nessun modello.
+    "gemini": {"label": "Gemini (gratuito con limiti: circa 20 richieste al giorno per modello, i modelli si alternano da soli)",
+               "notes": None},
     "deepseek": {"label": "DeepSeek (a pagamento, economico, senza limiti giornalieri)",
                  "notes": {"provider": "deepseek", "model": "deepseek-v4-pro", "rpm": 200, "workers": 8,
                            "temperature": 0.3, "max_tokens": 65536, "thinking": False}},
@@ -60,12 +59,11 @@ def render_config(root: str, lingua: str, preset: str, courses: Sequence[str] = 
         f"root = {q(root)}",
         f"lingua = {q(lingua)}",
         "",
-        "[modelli.notes]",
-        *(f"{k} = {q(v)}" for k, v in p["notes"].items()),
     ]
-    if p.get("riserva"):
-        parts.append(f"riserva = {q(p['riserva'])}")
-    if preset != "gemini":                  # il refiner di default è Gemini: lo allineo al provider scelto
+    if p["notes"]:                          # Gemini: nessun blocco, valgono i default (vedi `sbob modelli`)
+        parts += ["[modelli.notes]", *(f"{k} = {q(v)}" for k, v in p["notes"].items())]
+        if p.get("riserva"):
+            parts.append(f"riserva = {q(p['riserva'])}")
         parts += ["", "[modelli.refiner]", *(f"{k} = {q(v)}" for k, v in {
             **p["notes"], "temperature": 0.1, "max_tokens": 8192, "thinking": False, "tentativi": 3}.items())]
     parts.append("")
@@ -112,7 +110,7 @@ def remove_course_field(cfg: Path, slug: str, key: str) -> bool:
 def needed_providers(preset: str) -> list[str]:
     """Provider di cui servono le chiavi: Gemini sempre (trascrizione e PDF), più quelli degli appunti."""
     p = PRESETS[preset]
-    names = ["gemini", p["notes"]["provider"]] + ([p["riserva"]["provider"]] if p.get("riserva") else [])
+    names = ["gemini"] + ([p["notes"]["provider"]] if p["notes"] else []) + ([p["riserva"]["provider"]] if p.get("riserva") else [])
     return list(dict.fromkeys(names))
 
 

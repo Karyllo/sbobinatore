@@ -111,6 +111,16 @@ DEFAULT_MODELLI: dict[str, dict[str, Any]] = {
 }
 
 
+REPO_URL = "git+https://github.com/Karyllo/sbobinatore"
+
+
+def install_command(*extras: str) -> str:
+    """Comando per aggiungere pezzi a sbob. `--reinstall` riparte dall'indirizzo GitHub (il pacchetto non è su PyPI)
+    e riporta sempre anche `base`, altrimenti si perderebbero Gemini e il login."""
+    names = ",".join(dict.fromkeys(["base", *extras]))
+    return f'uv tool install --reinstall "sbobinatore[{names}] @ {REPO_URL}"'
+
+
 def find_config_file() -> Path | None:
     candidates = []
     if env := os.environ.get("SBOB_CONFIG"):

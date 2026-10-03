@@ -20,7 +20,7 @@ import secrets
 from collections.abc import Callable
 from contextlib import contextmanager
 
-from sbob.config import CONFIG_HOME
+from sbob.config import CONFIG_HOME, install_command
 from sbob.core.report import NeedsHuman
 
 PROFILE_DIR = CONFIG_HOME / "browser"
@@ -66,7 +66,7 @@ def browser(headless: bool):
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        raise NeedsHuman("Playwright non installato", action='uv tool install --reinstall "sbobinatore[all]"') from None
+        raise NeedsHuman("Playwright non installato", action=install_command("login")) from None
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(CONFIG_HOME, 0o700)
     os.chmod(PROFILE_DIR, 0o700)       # il profilo contiene la sessione di Ateneo

@@ -28,18 +28,22 @@ Il terminale è una finestra dove si scrivono i comandi. Sul Mac: premi `⌘ + S
 
 ## 2. Installare
 
-Una volta sola. Se non hai Homebrew (il gestore di programmi del Mac), prima installa quello da [brew.sh](https://brew.sh).
-
+Una volta sola, con **un comando** (installa ffmpeg, uv e sbob; controlla prima cosa hai già):
 ```bash
-brew install ffmpeg aria2
+curl -LsSf https://raw.githubusercontent.com/Karyllo/sbobinatore/main/install.sh | sh
 ```
+Su Mac, se non hai Homebrew (il gestore di programmi), il comando te lo chiede e ti indica [brew.sh](https://brew.sh): installalo e rilancia. Su Ubuntu/Debian chiede la password del computer per installare ffmpeg.
+
+Se preferisci farlo a mano: ffmpeg (Mac: `brew install ffmpeg`, Ubuntu: `sudo apt install ffmpeg`), poi uv e sbob:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 Chiudi e riapri il terminale, poi:
 ```bash
-uv tool install "sbobinatore[all] @ git+https://github.com/Karyllo/sbobinatore"
+uv tool install "sbobinatore[base] @ git+https://github.com/Karyllo/sbobinatore"
 ```
+(`aria2` non serve: velocizza solo il download dei video interi.)
+
 
 Per controllare che sia andato tutto bene:
 ```bash

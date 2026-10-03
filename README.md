@@ -15,21 +15,26 @@ Dalle registrazioni delle lezioni del Politecnico di Milano agli appunti, in un 
 
 ## Installazione
 
-Funziona su macOS e Linux. Serve una volta sola.
+Funziona su macOS e Linux. Serve una volta sola, e ti serve anche [Google Chrome](https://www.google.com/chrome/) per accedere con le credenziali del Poli.
 
-1. Installa i programmi di sistema (su macOS con [Homebrew](https://brew.sh)):
-   ```bash
-   brew install ffmpeg aria2
-   ```
-2. Installa [uv](https://docs.astral.sh/uv/), il gestore di Python. Pensa lui a Python e a tutte le librerie:
+**Un solo comando** (installa ffmpeg, [uv](https://docs.astral.sh/uv/) e sbob, controllando prima cosa hai già; è corto, leggilo se vuoi):
+```bash
+curl -LsSf https://raw.githubusercontent.com/Karyllo/sbobinatore/main/install.sh | sh
+```
+
+**Oppure a mano:**
+1. ffmpeg: su macOS `brew install ffmpeg` (serve [Homebrew](https://brew.sh)), su Ubuntu/Debian `sudo apt install ffmpeg`.
+2. uv, il gestore di Python (pensa lui a Python e a tutte le librerie):
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
-3. Installa sbob:
+3. sbob, nella versione base (Gemini e accesso al Poli):
    ```bash
-   uv tool install "sbobinatore[all] @ git+https://github.com/Karyllo/sbobinatore"
+   uv tool install "sbobinatore[base] @ git+https://github.com/Karyllo/sbobinatore"
    ```
-4. Configura e verifica:
+   Se vuoi usare DeepSeek o Claude per gli appunti, o convertire PDF, `sbob doctor` ti dice quale pezzo aggiungere (oppure `sbobinatore[all]` per avere tutto). `aria2` è facoltativo: serve solo a scaricare più in fretta i video interi.
+
+Poi configura e verifica:
    ```bash
    sbob init
    ```

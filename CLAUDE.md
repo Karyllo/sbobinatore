@@ -315,6 +315,11 @@ Miglioramenti nati dagli errori:
 - **Walkthrough: `docs/guida.md`** (linkato dal README): dal terminale al primo corso, costi e limiti del piano gratuito, tabella dei problemi comuni, privacy. Un test (`test_walkthrough_only_uses_existing_commands_and_options`) fallisce se cita comandi o opzioni inesistenti: aggiornarla insieme ai comandi.
 - **Download e formato:** `sbob download` riconosce le registrazioni già note (per id) e non riscarica; se chiedi esplicitamente `--formato video` avendo solo audio, scarica i video mancanti con gli stessi nomi (`_missing_files`); con video da config e audio presente considera fatto (il video si toglie per risparmiare spazio).
 
+## Installazione leggera (2026-10-03, da un amico che ha provato `sbob init` su Ubuntu: "quante dipendenze servono")
+- **`install.sh`** (un solo comando: ffmpeg + uv + sbob, controlla prima cosa c'è già). **Extra `base` = gemini + login** (40 pacchetti Python contro i 53 di `all`; il solo core ne ha 17); `all` resta per chi vuole tutto. **aria2 è facoltativo** (`doctor` lo segnala come avviso): per l'audio non porta niente (provato dal vero: 33 MB in 9 s col fallback Python, con ripresa da metà; il suo contatore mostrava già 1 connessione) e serve solo ai video interi.
+- **Tutti i rimedi suggeriti passano da `config.install_command(*extras)`**: `uv tool install --reinstall "sbobinatore[base,<extra>] @ git+https://github.com/Karyllo/sbobinatore"`. Prima suggerivano `"sbobinatore[pdf]"` senza indirizzo, che non funziona (il pacchetto non è su PyPI) e senza `base` avrebbe tolto Gemini e il login. Un test vieta di scriverli a mano. Extra `office` = markitdown.
+- **`sbob init` col preset Gemini** non scrive più `[modelli.*]` (valgono i default distribuiti su più modelli Gemini) e chiede **una sola chiave**: prima chiedeva anche DeepSeek (la riserva dei vecchi preset) e scriveva un config che sovrascriveva i default nuovi.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).
