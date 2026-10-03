@@ -82,3 +82,13 @@ def test_quota_texts_do_not_claim_20_per_model_for_every_model():
     from sbob.setup import PRESETS
     assert "Lite" in PRESETS["gemini"]["label"] and "per modello" not in PRESETS["gemini"]["label"]
     assert "Lite" in NOTE and "20 richieste per modello" not in NOTE
+
+
+def test_install_script_updates_apt_and_warns_about_chrome():
+    import subprocess
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "install.sh"
+    text = path.read_text()
+    assert "sudo apt-get update && sudo apt-get install -y ffmpeg" in text       # su un sistema appena installato senza update fallisce
+    assert "Google Chrome.app" in text and "google-chrome" in text and "chromium" in text and "sbob login" in text
+    assert subprocess.run(["sh", "-n", str(path)]).returncode == 0

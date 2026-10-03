@@ -19,7 +19,7 @@ else
       if have brew; then brew install ffmpeg
       else say "Serve Homebrew (il gestore di programmi del Mac): installalo da https://brew.sh e rilancia questo comando."; exit 1; fi ;;
     Linux)
-      if have apt-get; then sudo apt-get install -y ffmpeg
+      if have apt-get; then sudo apt-get update && sudo apt-get install -y ffmpeg
       elif have dnf; then sudo dnf install -y ffmpeg
       elif have pacman; then sudo pacman -S --noconfirm ffmpeg
       else say "Installa ffmpeg con il gestore di pacchetti della tua distribuzione e rilancia."; exit 1; fi ;;
@@ -39,6 +39,17 @@ fi
 # 3. sbob (versione base: Gemini + accesso al Poli)
 say "→ installo sbob"
 uv tool install --force "sbobinatore[base] @ $REPO"
+
+# 4. Chrome (serve solo per `sbob login`, l'accesso al Poli): se manca si avvisa, non si installa
+case "$(uname -s)" in
+  Darwin) [ -d "/Applications/Google Chrome.app" ] && chrome=1 || chrome=0 ;;
+  *) if have google-chrome || have google-chrome-stable || have chromium || have chromium-browser; then chrome=1; else chrome=0; fi ;;
+esac
+if [ "$chrome" = 1 ]; then
+  say "✓ Chrome già presente"
+else
+  say "! Google Chrome non trovato: serve per \`sbob login\` (l'accesso al Poli). Installalo da https://www.google.com/chrome prima di fare il login."
+fi
 
 say ""
 say "Fatto. Chiudi e riapri il terminale, poi scrivi:  sbob init"
