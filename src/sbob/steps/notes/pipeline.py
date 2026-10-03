@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 from sbob.core import prompts
 from sbob.core.batch import atomic_write_text
@@ -54,6 +56,30 @@ class ChunkCache:
 
 NO_CACHE = ChunkCache(None)
 
+FROM_CACHE = "da cache"
+
+
+class ModelTally:
+    """Quale modello ha risposto davvero a ogni blocco (principale o riserva), per un'intestazione veritiera."""
+
+    def __init__(self) -> None:
+        self.counts: Counter[str] = Counter()
+        self._lock = Lock()
+
+    def add(self, model: str | None, fallback: str = "") -> None:
+        with self._lock:
+            self.counts[model or fallback or "?"] += 1
+
+
+def format_models(counts: Counter[str] | dict[str, int], default: str = "") -> str:
+    """Un solo modello → 'a'; più modelli → 'a ×3, b ×9'. Senza blocchi (tutto vuoto) → `default`."""
+    items = sorted((m, n) for m, n in counts.items() if n)
+    if not items:
+        return default
+    if len(items) == 1:
+        return items[0][0]
+    return ", ".join(f"{m} ×{n}" for m, n in items)
+
 
 def wall_of_text(text: str) -> str | None:
     """Validatore: output lungo senza a capo = formattazione scadente → il registry ritenta."""
@@ -83,30 +109,39 @@ def split_topics(text: str, lingua: str) -> tuple[str, list[str]]:
     return rx.sub("", text).rstrip() + "\n", topics
 
 
-def refine_chunk(role: Role, i: int, chunks: list[str], lingua: str, item: str, cache: ChunkCache = NO_CACHE) -> str:
+def refine_chunk(role: Role, i: int, chunks: list[str], lingua: str, item: str, cache: ChunkCache = NO_CACHE,
+                 tally: ModelTally | None = None) -> str:
     start, end, _ = _MARKERS.get(lingua, _MARKERS["it"])
     prev = start if i == 0 else " ".join(chunks[i - 1].split()[-CONTEXT_WORDS:])
     nxt = end if i >= len(chunks) - 1 else " ".join(chunks[i + 1].split()[:CONTEXT_WORDS])
     prompt = prompts.render(lingua, "refiner", previous_context=prev, current_chunk=chunks[i], next_context=nxt)
     if (hit := cache.get("refined", i, role.model, prompt)) is not None:
+        if tally:
+            tally.add(FROM_CACHE)
         return hit
     res = role.complete([Message.user(prompt)], item=f"{item}#{i + 1}")
     if not res.ok or not res.text or len(res.text.split()) < MIN_REFINED_RATIO * len(chunks[i].split()):
         return chunks[i]                          # fallback sicuro: il testo originale (non in cache: si ritenta)
+    if tally:
+        tally.add(res.model, role.model)
     cache.put("refined", i, role.model, prompt, res.text)
     return res.text
 
 
 def notes_chunk(role: Role, i: int, chunk: str, total: int, lingua: str, item: str,
-                cache: ChunkCache = NO_CACHE) -> tuple[str, str | None]:
+                cache: ChunkCache = NO_CACHE, tally: ModelTally | None = None) -> tuple[str, str | None]:
     """(testo, errore). In caso di errore il testo è il banner da inserire."""
     prompt = prompts.render(lingua, "notes", variante=role.provider_name, chunk_text=chunk, part_number=str(i + 1),
                             total_parts=str(total))
     prompt += "\n\n" + prompts.load(lingua, "notes_extra", role.provider_name).strip()
     if (hit := cache.get("notes", i, role.model, prompt)) is not None:
+        if tally:
+            tally.add(FROM_CACHE)
         return normalize_math(hit), None
     res = role.complete([Message.user(prompt)], item=f"{item}#{i + 1}", validate=notes_validator(chunk))
     if res.ok and res.text:
+        if tally:
+            tally.add(res.model, role.model)
         cache.put("notes", i, role.model, prompt, res.text)
         return normalize_math(res.text), None
     return f"⚠️ ERRORE (blocco {i + 1}/{total}): {res.error}", res.error or "errore"
@@ -127,14 +162,16 @@ def _parallel(fn: Callable, args: list[tuple], workers: int) -> list:
 
 def generate_notes(raw: str, refiner: Role, notes: Role, lingua: str, item: str, chunk_words: int,
                    log: Callable[[str], None] = lambda m: None,
-                   cache: ChunkCache = NO_CACHE) -> tuple[str, list[str], list[str]]:
-    """(testo finale, argomenti, errori). Se errori non è vuoto l'output è parziale."""
+                   cache: ChunkCache = NO_CACHE, refiner_tally: ModelTally | None = None,
+                   notes_tally: ModelTally | None = None) -> tuple[str, list[str], list[str]]:
+    """(testo finale, argomenti, errori). Se errori non è vuoto l'output è parziale.
+    I `*_tally` raccolgono il modello che ha risposto a ogni blocco."""
     chunks = chunk_text(raw, chunk_words)
     log(f"{item}: {len(chunks)} blocchi, raffinamento con {refiner.label}")
-    refined = _parallel(refine_chunk, [(refiner, i, chunks, lingua, item, cache) for i in range(len(chunks))],
+    refined = _parallel(refine_chunk, [(refiner, i, chunks, lingua, item, cache, refiner_tally) for i in range(len(chunks))],
                         refiner.workers)
     log(f"{item}: generazione appunti con {notes.label}")
-    outs = _parallel(notes_chunk, [(notes, i, c, len(refined), lingua, item, cache) for i, c in enumerate(refined)],
+    outs = _parallel(notes_chunk, [(notes, i, c, len(refined), lingua, item, cache, notes_tally) for i, c in enumerate(refined)],
                      notes.workers)
     sections, topics, errors = [], [], []
     for text, err in outs:

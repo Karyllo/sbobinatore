@@ -12,7 +12,7 @@ from sbob.llm.cost import CostTracker
 from sbob.llm.registry import Registry, parse_model_override
 from sbob.steps.base import StepContext
 from sbob.steps.notes.chunker import DEFAULT_CHUNK_WORDS, chunk_text
-from sbob.steps.notes.pipeline import ChunkCache, generate_notes
+from sbob.steps.notes.pipeline import ChunkCache, ModelTally, format_models, generate_notes
 
 
 def run(ctx: StepContext) -> StepReport:
@@ -56,17 +56,20 @@ def _process(ctx: StepContext, job: Job, refiner, notes, chunk_words: int, rep: 
     if ctx.force:
         shutil.rmtree(cache_dir, ignore_errors=True)
     raw = strip_timestamps(raw)                 # i [mm:ss] restano nella trascrizione, non negli appunti
+    ref_tally, notes_tally = ModelTally(), ModelTally()
     text, topics, errors = generate_notes(raw, refiner, notes, ctx.course.lingua, stem, chunk_words, ctx.log,
-                                          cache=ChunkCache(cache_dir))
+                                          cache=ChunkCache(cache_dir), refiner_tally=ref_tally,
+                                          notes_tally=notes_tally)
     partial = job.dst.with_name(f"{stem}.parziale.md")
     if errors:
         atomic_write_text(partial, text)
         rep.fail(stem, f"{len(errors)} blocchi falliti, salvato parziale: {partial.name} ({errors[0]})")
         return
-    modello = notes.model + (f" (+ riserva {notes.used_fallback})" if notes.used_fallback else "")
+    # il modello che ha davvero risposto a ogni blocco (la riserva può aver preso il posto del principale)
+    modello = format_models(notes_tally.counts, notes.model)
     meta = frontmatter.lesson_meta(ctx.course, stem, argomento=tmeta.get("argomento"), backend=tmeta.get("backend"),
                                    modello=modello,
-                                   refiner=refiner.model)   # concetti e riassunti stanno in mappa/, non qui
+                                   refiner=format_models(ref_tally.counts, refiner.model))   # concetti e riassunti stanno in mappa/, non qui
     atomic_write_text(job.dst, frontmatter.join(meta, text))
     partial.unlink(missing_ok=True)
     shutil.rmtree(cache_dir, ignore_errors=True)

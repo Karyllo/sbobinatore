@@ -15,7 +15,7 @@ from sbob.llm.base import FilePart, Message
 from sbob.llm.cost import CostTracker
 from sbob.llm.registry import Registry, Role, parse_model_override
 from sbob.steps.base import StepContext
-from sbob.steps.notes.pipeline import NO_CACHE, ChunkCache
+from sbob.steps.notes.pipeline import FROM_CACHE, NO_CACHE, ChunkCache, ModelTally, format_models
 from sbob.steps.transcribe.base import AUDIO_NATIVE, write_transcript
 
 SEGMENT_SECONDS = 45 * 60   # usato solo se la risposta intera viene troncata (finish_reason=length)
@@ -29,23 +29,29 @@ def _ask(role: Role, audio: Path, mime: str, prompt: str, item: str):
     return res
 
 
-def _cached_ask(role: Role, cache: ChunkCache, kind: str, i: int, audio: Path, mime: str, prompt: str, item: str):
+def _cached_ask(role: Role, cache: ChunkCache, kind: str, i: int, audio: Path, mime: str, prompt: str, item: str,
+                tally: ModelTally | None = None):
     """Come _ask, ma un risultato completo già pagato (es. un segmento riuscito prima che finisse la quota) si riusa."""
     size = audio.stat().st_size if audio.exists() else 0
     key = f"{audio.name}:{size}\0{prompt}"
     if (hit := cache.get(kind, i, role.model, key)) is not None:
+        if tally:
+            tally.add(FROM_CACHE)
         return hit, "stop"
     res = _ask(role, audio, mime, prompt, item)
+    if tally:
+        tally.add(res.model, role.model)
     if res.finish_reason != "length":
         cache.put(kind, i, role.model, key, res.text)
     return res.text, res.finish_reason
 
 
-def transcribe_file(role: Role, audio: Path, prompt: str, workdir: Path, item: str, cache: ChunkCache = NO_CACHE) -> str:
+def transcribe_file(role: Role, audio: Path, prompt: str, workdir: Path, item: str, cache: ChunkCache = NO_CACHE,
+                    tally: ModelTally | None = None) -> str:
     if audio.suffix.lower() not in AUDIO_NATIVE:
         audio = media.to_m4a(audio, workdir)
     mime = AUDIO_NATIVE[audio.suffix.lower()]
-    text, finish = _cached_ask(role, cache, "full", 0, audio, mime, prompt, item)
+    text, finish = _cached_ask(role, cache, "full", 0, audio, mime, prompt, item, tally)
     if finish != "length":
         return text
     # risposta troncata: audio troppo lungo per un'unica risposta → a segmenti
@@ -54,7 +60,7 @@ def transcribe_file(role: Role, audio: Path, prompt: str, workdir: Path, item: s
         return text
     texts, offset = [], 0.0
     for i, seg in enumerate(parts, 1):
-        seg_text, seg_finish = _cached_ask(role, cache, "seg", i, seg, mime, prompt, f"{item}#{i}")
+        seg_text, seg_finish = _cached_ask(role, cache, "seg", i, seg, mime, prompt, f"{item}#{i}", tally)
         if seg_finish == "length":
             raise RuntimeError(f"segmento {i}/{len(parts)} ancora troncato: abbassa SEGMENT_SECONDS")
         texts.append(shift_timestamps(seg_text.strip(), offset))   # i [mm:ss] del segmento partono da 0
@@ -72,10 +78,12 @@ def transcribe_many(ctx: StepContext, jobs: list[Job], rep: StepReport) -> None:
         prompt += prompts.load(ctx.course.lingua, "transcriber_timestamp")
     workers = max(1, min(role.n_keys, 4))
 
-    def one(job: Job) -> tuple[Job, str]:
+    def one(job: Job) -> tuple[Job, str, ModelTally]:
+        tally = ModelTally()
         cache_dir = ctx.layout.state / "cache" / f"trascrizione_{job.dst.stem}"
         with tempfile.TemporaryDirectory() as tmp:
-            return job, transcribe_file(role, job.src, prompt, Path(tmp), job.dst.stem, ChunkCache(cache_dir))
+            text = transcribe_file(role, job.src, prompt, Path(tmp), job.dst.stem, ChunkCache(cache_dir), tally)
+            return job, text, tally
 
     ctx.log(f"trascrizione: {len(jobs)} file con {role.label} ({workers} paralleli)")
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -84,14 +92,15 @@ def transcribe_many(ctx: StepContext, jobs: list[Job], rep: StepReport) -> None:
             for fut in as_completed(futures):
                 job = futures[fut]
                 try:
-                    _, text = fut.result()
+                    _, text, tally = fut.result()
                 except NeedsHuman:
                     raise
                 except Exception as e:  # noqa: BLE001
                     rep.fail(job.dst.stem, e)
                     continue
                 ctx.log(f"trascrizione: {job.dst.stem} ok")
-                write_transcript(ctx, job, text, rep, backend="gemini", model=role.model)
+                write_transcript(ctx, job, text, rep, backend="gemini",
+                                 model=format_models(tally.counts, role.model))
                 shutil.rmtree(ctx.layout.state / "cache" / f"trascrizione_{job.dst.stem}", ignore_errors=True)   # riuscita: la cache non serve più
         except BaseException:
             for f in futures:

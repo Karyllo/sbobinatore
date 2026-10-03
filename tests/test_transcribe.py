@@ -184,3 +184,18 @@ def test_timestamps_shift_and_strip():
     assert format_ts(65) == "[01:05]" and format_ts(3725) == "[1:02:05]"
     assert shift_timestamps("[00:10] a\n\n[44:59] b", 2700) == "[45:10] a\n\n[1:29:59] b"
     assert strip_timestamps("[12:34] Allora,\n\n[1:02:03] passiamo") == "Allora,\n\npassiamo"
+
+
+def test_transcribe_file_tallies_models_that_answered(tmp_path, monkeypatch):
+    from sbob.steps.notes.pipeline import ModelTally, format_models
+    audio = tmp_path / "a.aac"
+    audio.write_bytes(b"x")
+    parts = [tmp_path / "a.part000.aac", tmp_path / "a.part001.aac"]
+    monkeypatch.setattr(gemini.media, "split_audio", lambda *a: parts)
+    monkeypatch.setattr(gemini.media, "duration_seconds", lambda p: 2700.0)
+    role = FakeRole([LLMResult(text="troncato", finish_reason="length", model="flash"),
+                     LLMResult(text="uno", finish_reason="stop", model="flash"),
+                     LLMResult(text="due", finish_reason="stop", model="lite")])
+    tally = ModelTally()
+    gemini.transcribe_file(role, audio, "p", tmp_path, "lez", tally=tally)
+    assert format_models(tally.counts) == "flash ×2, lite ×1"

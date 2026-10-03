@@ -182,3 +182,39 @@ def test_normalize_math_converts_latex_delimiters_but_not_code():
     assert "Sia $y$ reale" in out and "$$\nx \\ge 0\n$$" in out and "ancora $$x^n = y$$." in out
     assert "```\n\\( resta \\)\n```" in out and "Già $a$ e $$b$$." in out
     assert normalize_math(out) == out                                  # idempotente
+
+
+def test_header_reports_models_that_actually_answered(settings, monkeypatch):
+    """Principale e riserva rispondono a blocchi diversi: l'intestazione li elenca entrambi, con i conteggi."""
+    c = settings.corso("prova")
+    lay = Layout.of(c)
+    lay.ensure("trascrizioni")
+    (lay.trascrizioni / f"{STEM}.md").write_text(frontmatter.join({"backend": "gemini"}, "p " * 1800))   # 3 blocchi
+
+    def notes_answer(text, item):
+        model = "m-principale" if item.endswith("#1") else "m-lite"      # solo il primo blocco va al principale
+        return LLMResult(text="## Titolo\n\nparagrafo\n\n" + "riga\n" * 6, model=model)
+
+    class Reg:
+        def __init__(self, settings, tracker): self.tracker = tracker
+        def role(self, name, override=None):
+            return REFINER if name == "refiner" else NOTES
+
+    REFINER = FakeRole(lambda t, i: LLMResult(text=t, model="m-lite"))
+    NOTES = FakeRole(notes_answer)
+    NOTES.model = "m-principale"
+    NOTES.used_fallback = "fake/m-lite"      # l'ex intestazione avrebbe scritto sempre "(+ riserva ...)"
+    monkeypatch.setattr(notes_mod, "Registry", Reg)
+
+    rep = notes_mod.run(StepContext(settings, c, quiet=True))
+    assert rep.done == [STEM]
+    meta, _ = frontmatter.read(lay.appunti / f"{STEM}_appunti.md")
+    assert meta["modello"] == "m-lite ×2, m-principale ×1"
+    assert meta["refiner"] == "m-lite"
+
+
+def test_format_models():
+    from collections import Counter
+    assert pipeline.format_models(Counter({"a": 3})) == "a"
+    assert pipeline.format_models(Counter({"b": 9, "a": 3})) == "a ×3, b ×9"
+    assert pipeline.format_models(Counter(), "x") == "x"
