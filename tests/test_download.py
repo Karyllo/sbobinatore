@@ -368,3 +368,29 @@ def test_missing_link_txt_is_only_a_note_when_other_sources_work(settings, cours
     c.sorgenti = [{"tipo": "txt", "file": "link.txt"}]                  # unica fonte: allora serve davvero
     with pytest.raises(NeedsHuman):
         download.run(StepContext(settings, c, dry_run=True, quiet=True))
+
+
+def test_force_redownloads_with_same_stems_and_never_renumbers(settings, course_with_links, monkeypatch):
+    c = course_with_links
+    fake = FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00", ID2: "2025-09-18 10:00:00"})
+    links(c, ID1, ID2)
+    download.run(StepContext(settings, c, quiet=True))
+    lay = Layout.of(c)
+    before = sorted(p.stem for p in lay.video.glob("*.mp4"))
+    fake.downloaded.clear()
+    rep = download.run(StepContext(settings, c, quiet=True, force=True))
+    assert sorted(rep.done) == before == ["2025-09-17_prova_lez01", "2025-09-18_prova_lez02"]
+    assert sorted(p.stem for p in lay.video.glob("*.mp4")) == before          # nessun lez03/lez04
+    assert sorted(fake.downloaded) == sorted([ID1, ID2])
+
+
+def test_force_with_legacy_manifest_key_keeps_the_old_stem(settings, course_with_links, monkeypatch):
+    import json
+    c = course_with_links
+    lay = Layout.of(c)
+    lay.state.mkdir(parents=True)
+    (lay.state / "manifest.json").write_text(json.dumps({"videos": {"2025-09-17 09-30": "2025-09-17_prova_lez01"}}))
+    FakeWebex(monkeypatch, {ID1: "2025-09-17 09:30:00"})
+    links(c, ID1)
+    rep = download.run(StepContext(settings, c, quiet=True, force=True))
+    assert rep.done == ["2025-09-17_prova_lez01"]

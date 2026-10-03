@@ -343,7 +343,8 @@ def run(ctx: StepContext) -> StepReport:
         rep.notes.append("Nessuna registrazione trovata nelle fonti.")
         return rep
     videos = manifest.videos
-    redo = {} if ctx.force else _missing_files(ctx, found, videos, formato)      # note ma senza il file richiesto
+    # note ma da rifare: senza il file richiesto, oppure (--force) tutte, con lo stesso nome (niente rinumerazione)
+    redo = {v: videos[v] for v in found if v in videos} if ctx.force else _missing_files(ctx, found, videos, formato)
     unknown = [v for v in found if ctx.force or v not in videos or v in redo]
     rep.skipped = sorted(videos[v] for v in found if v in videos and not ctx.force and v not in redo)
 
@@ -364,11 +365,14 @@ def run(ctx: StepContext) -> StepReport:
         if isinstance(info, Exception):
             rep.fail(vid[:8], str(info))
             continue
-        if not ctx.force and vid not in redo and info.legacy_key in videos:   # già scaricata col vecchio downloader
+        if vid not in redo and info.legacy_key in videos:   # già scaricata col vecchio downloader
             videos[vid] = videos[info.legacy_key]
-            rep.skipped.append(videos[vid])
             relinked = True
-            continue
+            if ctx.force:
+                redo[vid] = videos[vid]                       # --force: si riscarica col nome che aveva
+            else:
+                rep.skipped.append(videos[vid])
+                continue
         recs[vid] = info
     if relinked and not ctx.dry_run:
         manifest.save()
