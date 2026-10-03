@@ -66,7 +66,9 @@ def transcribe_many(ctx: StepContext, jobs: list[Job], rep: StepReport) -> None:
     tracker = CostTracker(log_path=ctx.layout.costs)
     role = Registry(ctx.settings, tracker).role("trascrizione", parse_model_override(ctx.options.get("modello")))
     prompt = prompts.load(ctx.course.lingua, "transcriber")
-    if ctx.settings.raw.get("trascrizione", {}).get("timestamp", True):
+    # timestamp spenti di default (scelta dell'utente): su audio lunghi sono radi e sfasati di minuti; si riaccendono
+    # con `[trascrizione] timestamp = true`
+    if ctx.settings.raw.get("trascrizione", {}).get("timestamp", False):
         prompt += prompts.load(ctx.course.lingua, "transcriber_timestamp")
     workers = max(1, min(role.n_keys, 4))
 

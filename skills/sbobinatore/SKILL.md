@@ -55,10 +55,10 @@ I file stanno su disco, quindi li leggi direttamente. La CLI serve per **trovare
 3. Lancia `sbob cerca "<termini>" --corso <slug> --json`.
    - Tutti i termini devono comparire. Per una frase esatta metti `"tra virgolette"` dentro la query.
    - Restringi con `--in appunti`, `--in trascrizioni`, `--in mappa` o `--in materiale`.
-   - Ogni risultato riporta `lezione`, `data`, `sezione`, `minuto` e `file`.
+   - Ogni risultato riporta `lezione`, `data`, `sezione` e `file` (e `minuto` solo se la trascrizione ha i timestamp, di solito no).
    - Se trovi pochi risultati, prova sinonimi o un singolo termine.
 4. Apri **solo** gli appunti pertinenti, nella sezione indicata.
-5. Rispondi citando la fonte, per esempio "Lezione 03 del 24/09, sezione *Polarizzazione*". Se serve la parola esatta del docente, cita la trascrizione con il minuto: "lez03, min 12:30".
+5. Rispondi citando la fonte, per esempio "Lezione 03 del 24/09, sezione *Polarizzazione*". Se serve la parola esatta del docente, cita la trascrizione (file e lezione). Il minuto citalo solo se il risultato lo riporta, e dì che è approssimativo: non inventarlo e non stimarlo.
 6. Distingui teoria (`lez`) da esercitazione (`ese`). Se gli appunti non coprono l'argomento, dillo chiaramente e non inventare.
 
 ### "Cosa devo sapere prima di…" / "da dove parto"

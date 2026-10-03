@@ -77,3 +77,8 @@ inizio_corso = "2025-09-15"
 # anno_accademico = "2025-26"
 # cartella = "4 anno /1 semestre/Real and Functional Analysis"
 # sorgente = { tipo = "webeep", url = "https://webeep.polimi.it/course/view.php?id=..." }
+
+# ---------------------------------------------------------------- trascrizione
+[trascrizione]
+timestamp = false            # true = timestamp [mm:ss] nelle trascrizioni Gemini. Spento di default: su audio lunghi sono
+                             # radi e sfasati anche di qualche minuto; sui pezzi corti sono esatti
