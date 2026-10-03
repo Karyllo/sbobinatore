@@ -139,7 +139,7 @@ sbob quota      # quali modelli hanno finito la quota e fra quanto tornano (--az
 
 ### Taccuino NotebookLM per corso
 Con `notebooklm login` fatto (e `[notebook] attivo = true` in `sbob.toml` per averlo dentro `sbob run`), `sbob notebook <corso>` crea il taccuino del corso e lo tiene aggiornato:
-- una sorgente per gli **appunti** e una per ogni **cartella** del materiale (le trascrizioni no, sarebbero ridondanti);
+- una sorgente per gli **appunti**, una per la **mappa** (riassunti, concetti e prerequisiti: la vista d'insieme) e una per ogni **cartella** del materiale (le trascrizioni no, sarebbero ridondanti);
 - quando una cartella cambia, si sostituisce solo la sua sorgente;
 - le sorgenti che hai aggiunto a mano non vengono toccate;
 - gli anni passati si aggiungono solo con `sbob notebook <corso> aggiungi-archivio <anno>`.

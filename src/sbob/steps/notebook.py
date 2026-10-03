@@ -59,6 +59,46 @@ def _compose_group(course, label: str, docs: list[merge.Doc], prefix: str, edizi
     return out
 
 
+def compose_map(course, schede: dict[str, dict], edizione: str | None = None) -> str:
+    """La mappa per il taccuino: stessa fonte di mappa/INDICE.md (le schede) ma senza link a file locali, che lì non
+    significano niente. Una vista d'insieme: in che lezione nasce ogni concetto, cosa serve sapere prima.
+    Deterministico (niente date di generazione) come il resto: l'hash decide se ricaricarla."""
+    from sbob.core import naming
+
+    def heading(stem: str) -> str:
+        n = naming.parse(stem)
+        if n:
+            return f"{merge.SHORT_NAMES[n.tipo]} {n.num:02d} · {merge.it_date(n.data.isoformat())}"
+        return stem.replace("_", " ")
+
+    def when(stem: str) -> str:
+        n = naming.parse(stem)
+        return n.data.isoformat() if n else "9999"
+
+    stems = sorted(schede, key=lambda s: (when(s), s))
+    concepts: dict[str, dict[str, list[str]]] = {}
+    for stem in stems:
+        for c in schede[stem].get("concetti", []):
+            concepts.setdefault(c["nome"], {"introdotto": [], "ripreso": []})[c.get("ruolo", "ripreso")].append(heading(stem))
+    out = [f"# {merge.course_title(course, 'Mappa delle lezioni', course.docente)}", "",
+           f"{len(stems)} lezioni con scheda. Per ogni lezione: riassunto, concetti chiave e prerequisiti. "
+           "L'indice dei concetti dice dove ciascuno è introdotto e dove è ripreso.", "", "## Indice dei concetti", ""]
+    for name in sorted(concepts, key=str.casefold):
+        c = concepts[name]
+        parts = ([f"introdotto in {', '.join(c['introdotto'])}"] if c["introdotto"] else []) + \
+                ([f"ripreso in {', '.join(c['ripreso'])}"] if c["ripreso"] else [])
+        out.append(f"- {name}: {'; '.join(parts)}")
+    for stem in stems:
+        s = schede[stem]
+        out += ["", f"## {heading(stem)}", "", s.get("riassunto", "").strip()]
+        if s.get("concetti"):
+            out += ["", "Concetti: " + ", ".join(c["nome"] + (" (nuovo)" if c.get("ruolo") == "introdotto" else "")
+                                                   for c in s["concetti"])]
+        if s.get("prerequisiti"):
+            out += ["", "Prerequisiti: " + ", ".join(s["prerequisiti"])]
+    return "\n".join(out) + "\n"
+
+
 def plan_sources(course, prefix: str = "", edizione: str | None = None) -> dict[str, str]:
     """{titolo sorgente: testo}. Vuoto se non c'è ancora niente."""
     from sbob.core.layout import Layout
@@ -68,6 +108,11 @@ def plan_sources(course, prefix: str = "", edizione: str | None = None) -> dict[
     notes = [p for p in list_inputs(lay.appunti, [".md"]) if p.stem.endswith("_appunti")]
     if notes:
         wanted |= _compose_group(course, "Appunti", merge.load_docs(notes), prefix, edizione)
+
+    from sbob.core import index
+
+    if schede := index.load_schede(course):          # la mappa (riassunti, concetti, prerequisiti) come vista d'insieme
+        wanted[f"{prefix}Mappa"] = compose_map(course, schede, edizione)
 
     groups: dict[str, list[Path]] = {}
     for p in list_tree(lay.materiale_md, [".md"]):

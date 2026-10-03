@@ -273,3 +273,25 @@ def test_aggiorna_runs_only_linked_courses(settings, monkeypatch):
     monkeypatch.setattr(cli, "_run_chain", lambda corso, steps, **kw: calls.append(corso) or [StepReport(step="x", corso=corso)])
     runner.invoke(app, ["aggiorna", "--json"])
     assert calls == ["prova"]
+
+
+def test_map_source_is_clean_deterministic_and_updates_with_schede(settings, nlm_fake):
+    from sbob.core import index
+    c, lay = _course(settings)
+    schede = {"2025-09-17_prova_lez01": {"riassunto": "Diodi e giunzioni.", "hash": "h1",
+                                         "concetti": [{"nome": "Giunzione pn", "ruolo": "introdotto"}], "prerequisiti": ["Semiconduttore"]},
+              "2025-09-24_prova_lez02": {"riassunto": "BJT.", "hash": "h2",
+                                         "concetti": [{"nome": "Giunzione pn", "ruolo": "ripreso"}, {"nome": "BJT", "ruolo": "introdotto"}],
+                                         "prerequisiti": []}}
+    index.save_schede(c, schede)
+    text = notebook.plan_sources(c)["Mappa"]
+    assert text == notebook.plan_sources(c)["Mappa"]                                   # deterministico
+    assert "- Giunzione pn: introdotto in Lezione 01 · 17/09/2025; ripreso in Lezione 02 · 24/09/2025" in text
+    assert "Concetti: Giunzione pn (nuovo)" in text and "Prerequisiti: Semiconduttore" in text
+    assert "](<" not in text and "../" not in text                                      # niente link a file locali
+    _run(settings, c)
+    assert "Mappa" in ctx_state(settings, c)["sources"]
+    schede["2025-09-24_prova_lez02"]["riassunto"] = "BJT e polarizzazione."
+    index.save_schede(c, schede)
+    rep = _run(settings, c)
+    assert rep.done == ["sostituita: Mappa"]                                            # cambia la scheda → solo la Mappa si ricarica
