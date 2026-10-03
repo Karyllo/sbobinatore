@@ -92,6 +92,14 @@ def _office_to_pdf(src: Path, tmp: Path) -> Path | None:
     return pdf if res.returncode == 0 and pdf.exists() else None
 
 
+_RESULTS = re.compile(r"\b(esit[io]|risultati|graduatoria|voti|verbalizzazion\w*)\b", re.I)
+
+
+def is_results_list(name: str) -> bool:
+    """'Esiti AM1 - 03-07-26.pdf', 'Risultati prova', 'Graduatoria': liste con i dati (matricole, voti) di altri studenti."""
+    return bool(_RESULTS.search(Path(name).stem))
+
+
 def _office_to_text(src: Path) -> str | None:
     try:
         from markitdown import MarkItDown
@@ -125,13 +133,14 @@ def sync(ctx: StepContext, rep: StepReport) -> None:
         rep.done += [f.relpath for f, _ in todo]
         return
     ctx.log(f"materiale: {len(todo)} file da scaricare ({len(files)} su WeBeep)")
+    missing: list[tuple] = []
     for f, dst in todo:
         try:
             client.download(f, dst)
         except NeedsHuman:
             raise
-        except MissingOnServer as e:         # rotto su WeBeep: non è un errore di sbob, resta una nota ad ogni giro
-            rep.notes.append(f"{f.relpath}: {e}")
+        except MissingOnServer:              # 404 dal percorso normale: si riprova dopo con la cartella zip
+            missing.append((f, dst))
             continue
         except Exception as e:  # noqa: BLE001
             rep.fail(f.relpath, e)
@@ -140,6 +149,38 @@ def sync(ctx: StepContext, rep: StepReport) -> None:
         manifest.save()
         rep.done.append(f.relpath)
         rep.outputs.append(str(dst))
+    if missing:
+        _from_folder_zip(ctx, client, missing, manifest, rep)
+
+
+def _from_folder_zip(ctx: StepContext, client, missing: list[tuple], manifest, rep: StepReport) -> None:
+    """File che il percorso normale non raggiunge (404): si prendono dallo zip della cartella del modulo.
+    Quelli che non ci sono nemmeno lì restano una nota (file rotto su WeBeep)."""
+    from sbob.core.secrets import load_cookie
+
+    by_module: dict[int, list[tuple]] = {}
+    for f, dst in missing:
+        by_module.setdefault(f.module, []).append((f, dst))
+    session = load_cookie("MoodleSession")
+    for module, items in by_module.items():
+        zf = client.folder_zip(module, session) if (session and module) else None
+        names = set(zf.namelist()) if zf else set()
+        for f, dst in items:
+            if f.inner not in names:
+                why = "login scaduto? prova `sbob login`" if zf is None else "non c'è nemmeno nello zip della cartella"
+                rep.notes.append(f"{f.relpath}: non scaricabile da WeBeep ({why})")
+                continue
+            tmp = dst.with_name(f".dl-{dst.name}")
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_bytes(zf.read(f.inner))       # type: ignore[union-attr]
+            if f.modified:
+                os.utime(tmp, (f.modified, f.modified))
+            tmp.replace(dst)
+            manifest.materiale[f.key] = {"modified": f.modified, "size": f.size}
+            manifest.save()
+            rep.done.append(f.relpath)
+            rep.outputs.append(str(dst))
+            ctx.log(f"materiale: {f.relpath} preso dallo zip della cartella")
 
 
 # ------------------------------------------------------------------ siti personali dei docenti
@@ -267,8 +308,12 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
         rep.notes.append(f"{len(others)} file non convertibili (video, archivi, immagini…), lasciati come sono")
 
     todo, degraded_pending = [], []
+    privacy_skipped: list[str] = []
     for src in sources:
         rel = src.relative_to(lay.materiale).as_posix()
+        if is_results_list(src.name):             # elenchi di esiti: dati di altri studenti, mai a un modello né al taccuino
+            privacy_skipped.append(rel)
+            continue
         if ctx.only and Path(rel).stem not in ctx.only:
             continue
         if (folder := ctx.options.get("cartella")) and folder.lower() not in rel.lower():
@@ -284,6 +329,8 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
             continue
         todo.append((src, rel, h, out))
     todo += degraded_pending
+    if privacy_skipped:
+        rep.notes.append(f"{len(privacy_skipped)} elenchi di esiti non convertiti (contengono dati di altri studenti)")
     if ctx.dry_run:
         rep.done += [f"{rel}.md" for _, rel, _, _ in todo]
         return

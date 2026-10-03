@@ -236,3 +236,47 @@ def test_cartella_option_converts_only_matching_paths(wcourse, settings, monkeyp
     assert (lay.materiale_md / "Esami" / "tde 2024.txt.md").exists() and not (lay.materiale_md / "Lezioni").exists()
     mat.run(StepContext(settings, wcourse, quiet=True))                                      # poi il resto
     assert (lay.materiale_md / "Lezioni" / "s1.txt.md").exists()
+
+
+def test_404_files_are_taken_from_the_folder_zip(wcourse, settings, monkeypatch):
+    import io
+    import zipfile
+
+    from sbob.core import secrets
+    from sbob.webeep.client import MissingOnServer
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("Marchese_limiti_continuit%C3%A0.pdf", b"dallo zip")
+    zf = zipfile.ZipFile(io.BytesIO(buf.getvalue()))
+    ok = RemoteFile("Materiali", "Esercizi", "bello.txt", "u0", 5, 100, 7, "bello.txt")
+    odd = RemoteFile("Materiali", "Esercizi", "Marchese_limiti_continuit%C3%A0.pdf", "u1", 9, 100, 7,
+                     "Marchese_limiti_continuit%C3%A0.pdf")
+    gone = RemoteFile("Materiali", "Esercizi", "rotto.pdf", "u2", 9, 100, 7, "rotto.pdf")
+
+    class Client(FakeClient):
+        zips = []
+        def download(self, f, dst):
+            if f is not ok:
+                raise MissingOnServer("404")
+            super().download(f, dst)
+        def folder_zip(self, module, session):
+            Client.zips.append((module, bool(session)))
+            return zf
+    client = Client([ok, odd, gone])
+    monkeypatch.setattr("sbob.webeep.client.WebeepClient", lambda token: client)
+    monkeypatch.setattr("sbob.auth.browser.load_token", lambda: "T")
+    monkeypatch.setattr(secrets, "load_cookie", lambda name: "sessione")
+    lay = Layout.of(wcourse)
+    rep = mat.run(StepContext(settings, wcourse, quiet=True, options={"converti": False}))
+    assert (lay.materiale / "Materiali" / "Esercizi" / odd.nome).read_bytes() == b"dallo zip"
+    assert Client.zips == [(7, True)]                                        # una sola richiesta per cartella
+    assert any("rotto.pdf" in n and "nemmeno nello zip" in n for n in rep.notes) and not rep.failed
+    assert sorted(rep.done) == sorted([ok.relpath, odd.relpath])
+
+
+def test_results_lists_are_never_converted():
+    for name in ("Esiti AM1 - 03-07-26 - IV appello.pdf", "Esito AM1 - 09-06-26.pdf", "Risultati prova.pdf", "graduatoria.pdf"):
+        assert mat.is_results_list(name), name
+    for name in ("Testo AM1 - I appello.pdf", "Traccia soluzioni AM1.pdf", "Derivata.pdf", "Sviluppi di Taylor.pdf"):
+        assert not mat.is_results_list(name), name

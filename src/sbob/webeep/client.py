@@ -35,6 +35,8 @@ class RemoteFile:
     url: str
     size: int
     modified: int          # timestamp unix
+    module: int = 0        # id del modulo WeBeep (serve per scaricare la cartella intera come zip)
+    inner: str = ""        # percorso del file dentro la cartella del modulo (come appare nello zip)
 
     @property
     def relpath(self) -> str:
@@ -112,9 +114,30 @@ class WebeepClient:
                         nome = module.get("name", nome) + os.path.splitext(nome)[1]
                     else:
                         percorso = "/".join(p for p in (module.get("name", ""), percorso) if p)
+                    inner = "/".join(p for p in ((f.get("filepath") or "/").strip("/"), f.get("filename", "")) if p)
                     out.append(RemoteFile(sezione, safe_path(percorso), safe_name(nome), f["fileurl"],
-                                          int(f.get("filesize") or 0), int(f.get("timemodified") or 0)))
+                                          int(f.get("filesize") or 0), int(f.get("timemodified") or 0),
+                                          int(module.get("id") or 0), inner))
         return out
+
+    def folder_zip(self, module: int, moodle_session: str):
+        """Cartella intera come zip dal sito (sessione web, non il token): serve per i file con nomi che il percorso
+        normale non riesce a raggiungere (nomi con `%28`, `%C3%A0`…: pluginfile dà 404, lo zip li contiene).
+        Restituisce un `zipfile.ZipFile` o None se non riesce. Il cookie non si stampa né si salva."""
+        import io
+        import zipfile
+
+        s = requests.Session()
+        s.cookies.set("MoodleSession", moodle_session, domain="webeep.polimi.it")
+        try:
+            page = s.get(f"{BASE}/mod/folder/view.php?id={module}", timeout=60, allow_redirects=False)
+            m = re.search(r'sesskey["\']?\s*[:=]\s*["\']([A-Za-z0-9]+)', page.text) or re.search(r"sesskey=([A-Za-z0-9]+)", page.text)
+            if page.status_code != 200 or not m:
+                return None
+            z = s.get(f"{BASE}/mod/folder/download_folder.php", params={"id": module, "sesskey": m.group(1)}, timeout=300)
+            return zipfile.ZipFile(io.BytesIO(z.content)) if z.ok else None
+        except (requests.RequestException, zipfile.BadZipFile):
+            return None
 
     def text(self, fileurl: str) -> str:
         """Contenuto testuale di un file Moodle (es. l'index.html di una pagina)."""
