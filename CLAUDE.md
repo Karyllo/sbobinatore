@@ -301,6 +301,8 @@ Miglioramenti nati dagli errori:
 - **Trascrizione di lezioni lunghe**: con ragionamento di default Gemini spendeva 37k token in "thinking" e troncava la risposta → richiesta sprecata + passaggio a segmenti. Ora `thinking = "low"` per il ruolo (il livello si passa all'adapter Gemini) e i segmenti già pagati stanno in `.sbob/cache/trascrizione_<stem>/` (si riprendono dopo la quota).
 - **Rinnovo del ticket Webex**: l'email del Poli si ricava dal profilo WeBeep se manca `[login] email`.
 - `converti` ora anche per corso (`converti = true` in `[corsi.<slug>]`): opzione > corso > `[materiale]`.
+- **Formule con delimitatori sbagliati** (segnalato dall'utente: `( x )` e `[ … ]` al posto di `$x$`/`$$…$$`, non sistematico): DeepSeek scrive a volte `\\(…\\)` e `\\[…\\]`, che Obsidian non renderizza. Ora `core/text.normalize_math` li converte (fuori dai blocchi di codice, idempotente) su ogni blocco di appunti, anche da cache, e i prompt vietano esplicitamente quelle forme. Gli appunti già generati si ripuliscono rieseguendo `normalize_math` sul corpo (fatto per lez01/lez02 di Analisi 1).
+- **PDF in modalità solo testo**: le pagine senza testo estraibile (scansioni, appunti a mano) si saltano e aspettano un modello a visione (`_pages_with_text`); `sbob materiale --cartella <testo>` converte per cartella, per dare la priorità quando la quota è poca.
 - **Da tenere presente per il materiale scansionato:** la conversione solo-testo (DeepSeek) non serve per le scansioni; servono i modelli a visione, che condividono la quota con la trascrizione. Priorità: prima trascrizione, poi conversione, nei giorni dopo.
 
 ## Da fare
