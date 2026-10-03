@@ -18,7 +18,7 @@ SEEN_FILE = CONFIG_HOME / "modelli_visti.json"
 _TEXT = re.compile(r"^gemini-(\d+(?:\.\d+)?)-(flash-lite|flash|pro)(-preview)?$")
 _SKIP = ("tts", "image", "robotics", "computer-use", "customtools", "omni", "embedding", "live")
 NOTE = ("Un modello più nuovo non è per forza migliore per quel ruolo: l'output può cambiare, la quota giornaliera "
-        "(sul gratuito 20 richieste per modello) è diversa e i modelli appena usciti sono spesso sovraccarichi. "
+        "(sul gratuito circa 20 richieste al giorno per i modelli Flash, molte di più per i Lite) è diversa e i modelli appena usciti sono spesso sovraccarichi. "
         "sbob non cambia niente da solo: provalo su una lezione e confronta.")
 
 

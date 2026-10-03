@@ -20,7 +20,7 @@ Poi tiene tutto aggiornato quando escono nuove lezioni.
 - una **chiave Gemini** gratuita, la prendi da [Google AI Studio](https://aistudio.google.com/apikey) in due minuti;
 - un po' di pazienza il primo giorno (vedi "Quanto ci mette").
 
-**Costi:** puoi farcela gratis. Il piano gratuito di Gemini ha però dei limiti giornalieri (circa 20 richieste al giorno per ogni modello), quindi un corso intero richiede qualche giorno. Se hai fretta puoi aggiungere altre chiavi o usare un provider a pagamento: sbob non ti addebita nulla da solo.
+**Costi:** puoi farcela gratis. Il piano gratuito di Gemini ha però dei limiti giornalieri (pochi per i modelli Flash, circa 20 richieste al giorno, molti di più per i Lite), quindi un corso intero richiede qualche giorno. Se hai fretta puoi aggiungere altre chiavi o usare un provider a pagamento: sbob non ti addebita nulla da solo.
 
 ## 1. Aprire il terminale
 
@@ -100,7 +100,7 @@ Prima di far partire un corso intero puoi vedere cosa farebbe, senza fare niente
 
 ### Quanto ci mette
 
-Dipende dai limiti del tuo piano. Come ordine di grandezza, su un corso di 30 lezioni: scaricare le registrazioni richiede una quindicina di minuti, la trascrizione con NotebookLM qualche minuto, gli appunti circa 5 minuti a lezione. Con il piano gratuito di Gemini le richieste giornaliere finiscono: **non è un errore**. sbob lo dice, passa da solo ai modelli di riserva, e quando anche quelli finiscono si ferma. Rilancia il giorno dopo e riprende da dove era arrivato, senza rifare niente.
+Dipende dai limiti del tuo piano. Come ordine di grandezza, su un corso di 30 lezioni: scaricare le registrazioni richiede una quindicina di minuti, la trascrizione con NotebookLM qualche minuto, gli appunti circa 5 minuti a lezione. Con il piano gratuito di Gemini le richieste giornaliere dei modelli Flash (circa 20 al giorno) finiscono presto, quelle dei Lite molto più tardi: **non è un errore**. sbob lo dice, passa da solo ai modelli di riserva, e quando anche quelli finiscono si ferma. Rilancia il giorno dopo e riprende da dove era arrivato, senza rifare niente.
 
 `sbob quota` ti mostra quali modelli hanno finito la quota e fra quanto tornano.
 

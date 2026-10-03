@@ -74,3 +74,11 @@ def test_all_remedies_in_the_code_use_install_command():
         if f.name == "config.py":
             continue
         assert not re.search(r'uv tool install --reinstall "sbobinatore\[', f.read_text()), f"{f.name}: usa install_command()"
+
+
+def test_quota_texts_do_not_claim_20_per_model_for_every_model():
+    """Misurato: solo i Flash hanno circa 20 richieste al giorno, i Lite molte di più."""
+    from sbob.core.models import NOTE
+    from sbob.setup import PRESETS
+    assert "Lite" in PRESETS["gemini"]["label"] and "per modello" not in PRESETS["gemini"]["label"]
+    assert "Lite" in NOTE and "20 richieste per modello" not in NOTE

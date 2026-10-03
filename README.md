@@ -140,7 +140,7 @@ sbob pianifica --rimuovi
 Su macOS installa un LaunchAgent che lancia `sbob aggiorna` (parte appena il Mac si riattiva, se era in stop). Se serve il login o qualcosa fallisce ti arriva una notifica, e il dettaglio è in `~/.config/sbob/aggiorna.log`. Su Linux stampa la riga da aggiungere a `crontab -e`. Il job non contiene credenziali: sbob legge token e chiavi dai soliti file.
 
 ### Modelli e quota
-I modelli escono in fretta e ogni scelta è un compromesso tra qualità, stabilità e richieste al giorno (sul Gemini gratuito 20 per modello). sbob non cambia mai modello da solo, ma se ne accorge:
+I modelli escono in fretta e ogni scelta è un compromesso tra qualità, stabilità e richieste al giorno (sul Gemini gratuito circa 20 al giorno per i modelli Flash, molte di più per i Lite). sbob non cambia mai modello da solo, ma se ne accorge:
 ```bash
 sbob modelli    # cosa esiste, cosa usano i ruoli, nuove uscite, modelli ritirati o in preview (gratis, non consuma quota)
 sbob quota      # quali modelli hanno finito la quota e fra quanto tornano (--azzera dopo una ricarica)

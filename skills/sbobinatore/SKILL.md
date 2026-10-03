@@ -131,7 +131,7 @@ Un corso intero richiede ore (trascrizione, appunti, conversione). Regole per po
 - **Timestamp:** l'utente non li vuole; non riproporli.
 
 ### Modelli e quota (te ne accorgi tu, l'utente non deve inseguire i provider)
-I modelli escono in fretta e ognuno è un compromesso tra qualità, stabilità dell'output e richieste al giorno (sul Gemini gratuito: 20 per modello). Per questo sbob **non cambia mai modello da solo** e l'utente non deve seguire le novità: se ne accorge sbob, tu lo riferisci.
+I modelli escono in fretta e ognuno è un compromesso tra qualità, stabilità dell'output e richieste al giorno (sul Gemini gratuito: circa 20 al giorno per i modelli Flash, molte di più per i Lite). Per questo sbob **non cambia mai modello da solo** e l'utente non deve seguire le novità: se ne accorge sbob, tu lo riferisci.
 - **Quando controllare:** all'inizio di una sessione di lavoro sui corsi, dopo un errore di quota o 503, e quando l'utente chiede "come vanno i modelli". Comando: `sbob modelli --json` (gratis, non consuma quota). Se `avvisi` non è vuoto, **dillo all'utente** in italiano e in poche righe: cosa è uscito o cosa sta per sparire, per quale ruolo, e che un modello più nuovo non è per forza migliore (output diverso, quota diversa, i nuovi sono spesso sovraccarichi).
 - **Cosa fare con gli avvisi:**
   - *modello non più disponibile* → urgente: le chiamate falliranno; proponi un sostituto della stessa famiglia;

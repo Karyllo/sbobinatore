@@ -19,7 +19,7 @@ from sbob.core.naming import slugify
 PRESETS: dict[str, dict[str, Any]] = {
     # Gemini usa i default di sbob (DEFAULT_MODELLI): ruoli distribuiti su modelli diversi con riserve, tutti Gemini.
     # Quindi basta UNA chiave (niente DeepSeek) e nel file di configurazione non si scrive nessun modello.
-    "gemini": {"label": "Gemini (gratuito con limiti: circa 20 richieste al giorno per modello, i modelli si alternano da soli)",
+    "gemini": {"label": "Gemini (gratuito con limiti: pochi blocchi al giorno per i modelli Flash (circa 20 richieste), molti di più per i Lite; i modelli si alternano da soli)",
                "notes": None},
     "deepseek": {"label": "DeepSeek (a pagamento, economico, senza limiti giornalieri)",
                  "notes": {"provider": "deepseek", "model": "deepseek-v4-pro", "rpm": 200, "workers": 8,
