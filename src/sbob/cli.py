@@ -23,7 +23,9 @@ from sbob.core.report import Exit, NeedsHuman, QuotaExhausted, StepReport
 from sbob.steps.base import PIPELINE, StepContext, get_step
 
 app = typer.Typer(add_completion=False, no_args_is_help=False, rich_markup_mode="rich",
-                  help="Pipeline lezioni: download → audio → trascrivi → appunti (+ merge, pdf).")
+                  help="[bold]sbob[/bold]: dalle registrazioni delle lezioni ad appunti, mappa del corso e taccuino NotebookLM, "
+                       "sempre aggiornati. Scrivi [bold]sbob[/bold] da solo per il menu guidato.",
+                  epilog="Prima volta? Scrivi:  sbob aiuto")
 out = Console()
 err = Console(stderr=True)
 
@@ -127,7 +129,7 @@ def _run_step(step: str, corso: str, *, force=False, dry_run=False, only=None, o
 
 @app.command()
 def corsi(as_json: JsonOpt = False):
-    """Elenca i corsi configurati."""
+    """Elenca i tuoi corsi."""
     s = _settings()
     rows = [{"slug": c.slug, "nome": c.nome, "anno": c.anno_accademico, "cartella": str(c.cartella),
              "esiste": c.cartella.exists(), "trascrizione": c.trascrizione,
@@ -239,7 +241,7 @@ def merge(corso: str, archivio: ArchOpt = None, as_json: JsonOpt = False,
 @app.command()
 def link(corso: str, archivio: ArchOpt = None, as_json: JsonOpt = False,
          url: Annotated[Optional[str], typer.Option(help="Link all'archivio (modulo WeBeep o getservizio); default: dal corso WeBeep collegato.")] = None):
-    """Raccoglie i link delle registrazioni dall'archivio del Poli e li scrive in <corso>/link_archivio.txt (nessun download)."""
+    """Legge dall'archivio del Poli i link delle registrazioni e li salva in un file (senza scaricare niente)."""
     from sbob.steps.download import archive_links
 
     s = _settings()
@@ -265,7 +267,7 @@ def materiale(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry
               converti: Annotated[Optional[bool], typer.Option("--converti/--senza-conversione",
                   help="Converte in Markdown (default: [materiale] converti in sbob.toml, altrimenti sì).")] = None,
               cartella: Annotated[Optional[str], typer.Option(help="Converte solo i file il cui percorso contiene questo testo (es. Dispense): per dare la priorità quando la quota è poca.")] = None):
-    """Scarica il materiale da WeBeep (nuovo o modificato) e lo converte in Markdown in <corso>/materiale_md/."""
+    """Scarica il materiale da WeBeep (solo il nuovo) e, se vuoi, lo converte in testo leggibile."""
     _emit([_run_step("materiale", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
                      options={"modello": modello, "converti": converti, "cartella": cartella})], as_json)
 
@@ -329,7 +331,7 @@ def webeep_collega(corso: str, webeep_id: int):
 def mappa(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, only: OnlyOpt = None,
           as_json: JsonOpt = False,
           modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per il ruolo mappa")] = None):
-    """Schede per l'agente (riassunto, concetti, prerequisiti) in <corso>/mappa/, poi rigenera gli indici."""
+    """Crea la mappa del corso: riassunto, concetti e prerequisiti di ogni lezione."""
     _emit([_run_step("mappa", corso, archivio=archivio, force=force, dry_run=dry_run, only=only, quiet=as_json,
                      options={"modello": modello})], as_json)
 
@@ -337,7 +339,7 @@ def mappa(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run
 @app.command()
 def indice(corso: Annotated[Optional[list[str]], typer.Argument(help="Corsi (vuoto = tutti + indice globale).")] = None,
            as_json: JsonOpt = False):
-    """Rigenera mappe e indici dai file, senza chiamate LLM."""
+    """Rigenera l'indice della mappa dai file (veloce e gratis)."""
     from sbob.core.index import render_all
 
     s = _settings()
@@ -360,7 +362,7 @@ def cerca(query: Annotated[str, typer.Argument(help='Termini (tutti devono compa
           archivi: Annotated[Optional[bool], typer.Option("--archivi/--senza-archivi",
               help="Include le edizioni passate. Default: solo l'anno in corso, e se non trova niente anche le passate.")] = None,
           as_json: JsonOpt = False):
-    """Cerca nei corsi: restituisce lezione, sezione, minuto e il paragrafo giusto."""
+    """Cerca un termine nei tuoi corsi: ti dice lezione, sezione e il paragrafo giusto."""
     from sbob.core.search import SOURCES, search
 
     bad = [d for d in dove or [] if d not in SOURCES]
@@ -388,7 +390,7 @@ def cerca(query: Annotated[str, typer.Argument(help='Termini (tutti devono compa
 def verifica(corso: Annotated[Optional[str], typer.Argument(help="Slug del corso (vuoto = tutti).")] = None,
              as_json: JsonOpt = False,
              senza_audio: Annotated[bool, typer.Option("--senza-audio", help="Salta il controllo durata audio (più veloce).")] = False):
-    """Controllo qualità: contenuto perso, trascrizioni troncate, loop, parziali, numerazione, mappa vecchia."""
+    """Controlla che trascrizioni e appunti siano completi (niente contenuto perso o troncato)."""
     from sbob.core.verify import verify_course
 
     s = _settings()
@@ -418,7 +420,7 @@ def pdf(path: Annotated[str, typer.Argument(help="File .pdf o cartella di PDF.")
         out: Annotated[Optional[str], typer.Option("--out", help="Cartella di destinazione (default: <corso>/materiale_md, o ./markdown_output senza corso).")] = None,
         force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
         modello: Annotated[Optional[str], typer.Option(help="provider[:modello] per il ruolo pdf")] = None):
-    """Converte PDF in Markdown con un modello multimodale (formule in LaTeX, immagini descritte)."""
+    """Converte un PDF in testo leggibile, con formule e figure descritte."""
     from sbob.config import Course
     from pathlib import Path
 
@@ -449,7 +451,7 @@ def pdf(path: Annotated[str, typer.Argument(help="File .pdf o cartella di PDF.")
 def run(corso: str, archivio: ArchOpt = None, force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
         da: Annotated[str, typer.Option("--da", help="Primo passo.")] = PIPELINE[0],
         fino_a: Annotated[str, typer.Option("--fino-a", help="Ultimo passo.")] = PIPELINE[-1]):
-    """Esegue la catena materiale → download → audio → trascrivi → appunti → mappa → notebook. Si ferma se un passo richiede l'utente."""
+    """Fa tutto per UN corso, dalla prima all'ultima tappa (materiale, registrazioni, trascrizione, appunti, mappa, taccuino). Si ferma se serve te."""
     try:
         steps = PIPELINE[PIPELINE.index(da): PIPELINE.index(fino_a) + 1]
     except ValueError:
@@ -484,7 +486,7 @@ def _run_chain(corso: str, steps, *, archivio=None, force=False, dry_run=False, 
 @app.command()
 def aggiorna(force: ForceOpt = False, dry_run: DryOpt = False, as_json: JsonOpt = False,
              notifica: Annotated[bool, typer.Option("--notifica", help="Notifica di sistema se serve l'utente o qualcosa è fallito (per il job notturno).")] = False):
-    """Esegue la catena completa su tutti i corsi collegati a WeBeep (quelli scelti con `sbob webeep scegli`)."""
+    """Fa tutto per tutti i corsi che hai scelto da WeBeep (`sbob webeep scegli`)."""
     s = _settings()
     slugs = [slug for slug, c in s.corsi.items() if c.webeep_id]
     if not slugs:
@@ -553,7 +555,7 @@ def _notebook_ask(corso: str, question: str, as_json: bool) -> None:
 def pianifica(ora: Annotated[str, typer.Option("--ora", help="HH:MM")] = "03:00",
               rimuovi: Annotated[bool, typer.Option("--rimuovi", help="Toglie l'aggiornamento automatico.")] = False,
               stato: Annotated[bool, typer.Option("--stato", help="Mostra se è installato.")] = False):
-    """Aggiornamento automatico ogni notte (`sbob aggiorna`): LaunchAgent su macOS, riga di cron altrove."""
+    """Ogni notte aggiorna da solo tutti i tuoi corsi (su Mac con un'attività pianificata)."""
     from sbob import pianifica as pj
 
     try:
@@ -607,7 +609,7 @@ def doctor(as_json: JsonOpt = False,
 
 @app.command()
 def init(force: Annotated[bool, typer.Option("--force", help="Ricrea la configurazione se esiste già.")] = False):
-    """Prima configurazione guidata: cartella dei corsi, modello per gli appunti, chiavi API, primi corsi."""
+    """Prima configurazione guidata: dove tenere i corsi, quale modello usare, le chiavi."""
     from sbob.setup import init as run_init
 
     if not sys.stdin.isatty():
@@ -761,6 +763,80 @@ def cookie(nome: Annotated[str, typer.Argument(help="ticket | MoodleSession")],
 
     set_cookie(_settings(), nome, valore)
     err.print(f"[green]Cookie {nome} salvato.[/green]")
+
+
+GUIDE_URL = "https://github.com/Karyllo/sbobinatore/blob/main/docs/guida.md"
+HELP_TEXT = f"""[bold]sbob[/bold] trasforma le registrazioni delle lezioni in appunti, e tiene il corso sempre aggiornato.
+
+[bold]Come funziona, in breve[/bold]
+  1. scarica le registrazioni (e il materiale da WeBeep)
+  2. le trascrive e ne ricava appunti
+  3. costruisce una mappa del corso e un taccuino NotebookLM
+  4. tu cerchi negli appunti o fai domande a un assistente AI
+
+[bold]La prima volta[/bold] (una volta sola)
+  sbob init            configura cartella dei corsi, modelli e chiavi
+  sbob login           accedi con le credenziali del Poli (si apre una finestra)
+  sbob webeep scegli   scegli i corsi da seguire
+  sbob doctor          controlla che sia tutto a posto, e dice come sistemare
+
+[bold]Ogni giorno[/bold]
+  sbob                 menu guidato: ti chiede cosa vuoi fare
+  sbob aggiorna        fa tutto per tutti i tuoi corsi
+  sbob status CORSO    a che punto sei, lezione per lezione
+
+[bold]Per studiare[/bold]
+  sbob cerca "termine"                         dove se ne parla (lezione e sezione)
+  sbob notebook CORSO chiedi "domanda"         risponde con le fonti citate
+
+[bold]Se qualcosa non va[/bold]
+  Gli errori dicono sempre cosa fare. In più:
+  sbob doctor          controlla programmi, chiavi e accessi
+  sbob quota           quali modelli hanno finito la quota e quando tornano
+  sbob COMANDO --help  spiega un comando
+
+CORSO è il nome breve del corso (lo vedi con [bold]sbob corsi[/bold]).
+Guida completa passo passo: {GUIDE_URL}"""
+
+
+@app.command("aiuto")
+def aiuto():
+    """Cos'è sbob e da dove cominciare, in parole semplici."""
+    out.print(HELP_TEXT)
+
+
+@app.command("help", hidden=True)
+def help_alias():
+    """Come `sbob aiuto`."""
+    out.print(HELP_TEXT)
+
+
+# Come si raggruppano i comandi in `sbob --help`: per cosa vuoi fare, non in ordine di scrittura nel codice
+HELP_PANELS = {
+    "Per cominciare": ["aiuto", "init", "login", "webeep", "doctor", "aggiungi-corso", "installa-skill"],
+    "Ogni giorno": ["aggiorna", "status", "run", "corsi", "pianifica"],
+    "Per studiare": ["cerca", "notebook", "mappa", "indice", "verifica"],
+    "Un passo alla volta": ["materiale", "download", "audio", "trascrivi", "appunti", "merge", "link", "pdf", "archivio"],
+    "Strumenti": ["modelli", "quota", "cookie"],
+}
+
+
+def _apply_help_panels() -> None:
+    panel_of = {name: panel for panel, names in HELP_PANELS.items() for name in names}
+    for info in app.registered_commands:
+        name = info.name or (info.callback.__name__.replace("_", "-") if info.callback else "")
+        info.rich_help_panel = panel_of.get(name)
+    for group in app.registered_groups:
+        group.rich_help_panel = panel_of.get(group.name or "")
+    position = {name: (i, j) for i, names in enumerate(HELP_PANELS.values()) for j, name in enumerate(names)}
+
+    def key(info) -> tuple[int, int]:                                    # riquadri e comandi escono nell'ordine di HELP_PANELS
+        name = info.name or (info.callback.__name__.replace("_", "-") if info.callback else "")
+        return position.get(name, (len(HELP_PANELS), 0))
+    app.registered_commands.sort(key=key)
+
+
+_apply_help_panels()
 
 
 def main() -> None:
