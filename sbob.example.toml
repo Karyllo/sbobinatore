@@ -11,43 +11,30 @@ formato = "video"            # "audio" = solo la voce (mp3 di Webex, molto più 
                              # si può mettere anche per un singolo corso: formato = "audio" in [corsi.<slug>]
 
 # ---------------------------------------------------------------- modelli per ruolo
-# Ogni ruolo sceglie provider e modello in modo indipendente. Si possono sovrascrivere da CLI
-# (es. `sbob appunti elettronica --notes anthropic:claude-sonnet-5-5`).
+# I default sono già pronti (vedi DEFAULT_MODELLI in config.py): ogni ruolo usa un modello Gemini diverso, perché
+# ogni modello ha la sua quota giornaliera. Il più nuovo (3.8 Flash) fa gli appunti, il lavoro più difficile:
+#   trascrizione  gemini-3-flash-preview   (riserva 3.5 Flash-Lite)
+#   notes         gemini-3.8-flash         (riserva 3.7 Flash)
+#   refiner       gemini-3.5-flash-lite    (riserva 3.1 Flash-Lite)
+#   pdf           gemini-3.6-flash         (riserva 3.5 Flash)
+#   pdf_testo     gemini-3.1-flash-lite    (solo testo, quando finisce la quota a visione)
+#   mappa         gemini-3.1-flash-lite    (riserva 3.5 Flash-Lite)
+# Qui si cambia solo ciò che serve. Si può sovrascrivere anche da CLI (es. `sbob appunti elettronica --notes anthropic:claude-sonnet-5-5`).
 # prezzi in USD per milione di token (facoltativi: servono solo per il riepilogo costi).
 
-[modelli.trascrizione]
-provider = "gemini"
-model = "gemini-3-flash-preview"
-rpm = 10
-
-[modelli.refiner]
-provider = "deepseek"
-model = "deepseek-v4-flash"
-rpm = 200
-temperature = 0.1
-max_tokens = 8192
+# [modelli.notes]
+# provider = "deepseek"                      # esempio: appunti con DeepSeek (a pagamento, nessun limite giornaliero)
+# model = "deepseek-v4-pro"
+# rpm = 200
+# thinking = false
+# riserva = { provider = "gemini", model = "gemini-3.8-flash", rpm = 10 }
 # prezzi = { input = 0.0, output = 0.0 }
 
-[modelli.notes]
-provider = "gemini"
-model = "gemini-3.5-flash"
-rpm = 10
-temperature = 0.3
-top_p = 0.95
-max_tokens = 65536
-thinking = true
-# Quando Gemini (gratuito: ~20 richieste/giorno) esaurisce la quota, i blocchi rimanenti vanno qui:
-riserva = { provider = "deepseek", model = "deepseek-v4-pro", rpm = 200, thinking = false, workers = 8 }
-
-[modelli.pdf]
-provider = "gemini"            # Gemini legge il PDF nativamente (layout, formule, figure)
-model = "gemini-3.8-flash"
-rpm = 10
-pagine_per_blocco = 8          # pagine per chiamata; un blocco fallito viene ritentato pagina per pagina
-# pdf_modo = "immagini"        # forzato: pagine come PNG (automatico per provider OpenAI-compatibili, es. Qwen-VL)
-# Alternativa con Qwen (visione) — verifica nome modello e endpoint sul tuo account DashScope:
-#   provider = "qwen"
-#   model = "qwen-vl-max"
+# Alternativa per leggere i PDF con Qwen (visione) — verifica nome modello e endpoint sul tuo account DashScope:
+# [modelli.pdf]
+# provider = "qwen"
+# model = "qwen-vl-max"
+# pdf_modo = "immagini"          # pagine come PNG (automatico per i provider OpenAI-compatibili)
 # NB: l'API DeepSeek è solo testo: non può leggere PDF.
 
 # ---------------------------------------------------------------- materiale

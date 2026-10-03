@@ -19,6 +19,7 @@ provider = "fake"
 model = "fake-1"
 rpm = 1000
 tentativi = 3
+riserva = ""          # niente riserva ereditata dai default (che è Gemini)
 
 [providers.fake]
 tipo = "fake"
