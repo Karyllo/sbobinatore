@@ -173,3 +173,12 @@ def test_provider_prompt_variant():
     assert prompts.load("it", "notes", "gemini") == base                    # nessuna variante → prompt base
     out = prompts.render("it", "notes", variante="deepseek", chunk_text="X", part_number=1, total_parts=2)
     assert "Parte 1 di 2" in out and "$x_{ij}$" in out                       # le graffe LaTeX sopravvivono a format
+
+
+def test_normalize_math_converts_latex_delimiters_but_not_code():
+    from sbob.core.text import normalize_math
+    src = "Sia \\( y \\) reale e\n\\[\nx \\ge 0\n\\]\ne ancora \\[ x^n = y \\].\n```\n\\( resta \\)\n```\nGià $a$ e $$b$$."
+    out = normalize_math(src)
+    assert "Sia $y$ reale" in out and "$$\nx \\ge 0\n$$" in out and "ancora $$x^n = y$$." in out
+    assert "```\n\\( resta \\)\n```" in out and "Già $a$ e $$b$$." in out
+    assert normalize_math(out) == out                                  # idempotente

@@ -11,7 +11,7 @@ La lunghezza e il livello di dettaglio devono essere quasi identici all'input.
 ISTRUZIONI DI FORMATTAZIONE:
 1. Usa `## Titolo` e `### Sottotitolo` per strutturare il testo.
 2. Inserisci SEMPRE una riga vuota tra i paragrafi.
-3. Converti TUTTE le formule in LaTeX: inline $f(x)$ o blocco $$ \int f(x) dx $$.
+3. Converti TUTTE le formule in LaTeX: inline $f(x)$ o blocco $$ \int f(x) dx $$. Usa SOLO i delimitatori `$...$` e `$$...$$`: MAI `\(...\)`, MAI `\[...\]`, MAI parentesi tonde o quadre al loro posto.
 4. Non usare elenchi puntati se non strettamente necessario; preferisci il testo discorsivo articolato.
 
 CONTESTO: Parte {part_number} di {total_parts}.

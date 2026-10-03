@@ -11,7 +11,7 @@ The length and level of detail must be nearly identical to the input.
 FORMATTING INSTRUCTIONS:
 1. Use `## Title` and `### Subtitle` to structure the text.
 2. Always insert a blank line between paragraphs.
-3. Convert ALL formulas to LaTeX: inline $f(x)$ or block $$ \int f(x) dx $$.
+3. Convert ALL formulas to LaTeX: inline $f(x)$ or block $$ \int f(x) dx $$. Use ONLY `$...$` and `$$...$$` delimiters: NEVER `\(...\)`, NEVER `\[...\]`, never plain parentheses or brackets instead.
 4. Avoid bullet points unless strictly necessary; prefer flowing discursive prose.
 
 CONTEXT: Part {part_number} of {total_parts}.

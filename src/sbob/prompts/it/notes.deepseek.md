@@ -16,7 +16,7 @@ STILE (fondamentale):
 FORMATTAZIONE:
 1. Usa `## Titolo` e `### Sottotitolo` per strutturare il testo per argomenti (titoli descrittivi, non generici).
 2. Inserisci SEMPRE una riga vuota tra i paragrafi.
-3. Converti TUTTE le formule, variabili e insiemi in LaTeX: inline $x_{{ij}}$ o blocco $$ \sum_{{j \in J}} a_{{ij}} x_j \geq 1 $$.
+3. Converti TUTTE le formule, variabili e insiemi in LaTeX: inline $x_{{ij}}$ o blocco $$ \sum_{{j \in J}} a_{{ij}} x_j \geq 1 $$. Usa SOLO i delimitatori `$...$` e `$$...$$`: MAI `\(...\)`, MAI `\[...\]`, MAI parentesi tonde o quadre al loro posto (anche per una sola variabile: $x$, non (x)).
 4. Usa gli elenchi puntati solo per enumerazioni vere (es. regole d'esame, elenchi di vincoli); per i ragionamenti preferisci la prosa.
 
 CONTESTO: Parte {part_number} di {total_parts} della stessa lezione (non ripetere introduzioni o conclusioni generali: la parte si inserisce tra le altre).

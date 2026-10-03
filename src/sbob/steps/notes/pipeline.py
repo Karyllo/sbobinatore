@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from sbob.core import prompts
 from sbob.core.batch import atomic_write_text
 from sbob.core.report import NeedsHuman
+from sbob.core.text import normalize_math
 from sbob.llm.base import Message
 from sbob.llm.registry import Role
 from sbob.steps.notes.chunker import chunk_text
@@ -103,11 +104,11 @@ def notes_chunk(role: Role, i: int, chunk: str, total: int, lingua: str, item: s
                             total_parts=str(total))
     prompt += "\n\n" + prompts.load(lingua, "notes_extra", role.provider_name).strip()
     if (hit := cache.get("notes", i, role.model, prompt)) is not None:
-        return hit, None
+        return normalize_math(hit), None
     res = role.complete([Message.user(prompt)], item=f"{item}#{i + 1}", validate=notes_validator(chunk))
     if res.ok and res.text:
         cache.put("notes", i, role.model, prompt, res.text)
-        return res.text, None
+        return normalize_math(res.text), None
     return f"⚠️ ERRORE (blocco {i + 1}/{total}): {res.error}", res.error or "errore"
 
 

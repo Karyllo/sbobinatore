@@ -11,6 +11,44 @@ def _norm(word: str) -> str:
     return _NORM.sub("", word.lower())
 
 
+_FENCE_LINE = re.compile(r"^\s*(```|~~~)")
+_DISPLAY = re.compile(r"\\\[(.+?)\\\]", re.S)
+_INLINE = re.compile(r"\\\((.+?)\\\)", re.S)
+
+
+def normalize_math(text: str) -> str:
+    """Formule con i delimitatori di Obsidian: `\\( x \\)` → `$x$`, `\\[ ... \\]` → `$$ ... $$`.
+    I modelli (DeepSeek soprattutto) a volte usano la forma LaTeX pura, che Obsidian non renderizza e che molti viewer
+    Markdown mangiano lasciando `( x )` e `[ ... ]`. Non tocca i blocchi di codice. Idempotente."""
+    out: list[str] = []
+    buf: list[str] = []
+    fence: str | None = None
+
+    def flush() -> None:
+        if buf:
+            chunk = "\n".join(buf)
+            chunk = _DISPLAY.sub(lambda m: f"$$\n{m.group(1).strip()}\n$$" if "\n" in m.group(1)
+                                 else f"$${m.group(1).strip()}$$", chunk)
+            out.append(_INLINE.sub(lambda m: f"${m.group(1).strip()}$", chunk))
+            buf.clear()
+
+    for line in text.split("\n"):
+        m = _FENCE_LINE.match(line)
+        if m and fence is None:
+            flush()
+            fence = m.group(1)
+            out.append(line)
+        elif m and fence == m.group(1):
+            fence = None
+            out.append(line)
+        elif fence is not None:
+            out.append(line)
+        else:
+            buf.append(line)
+    flush()
+    return "\n".join(out)
+
+
 def collapse_repetitions(text: str, max_ngram: int = 8, unigram_min: int = 6, ngram_min: int = 4) -> str:
     """Riduce a una sola occorrenza i loop di allucinazione dei trascrittori: lo stesso n-gramma ripetuto di fila
     almeno `unigram_min` volte (parole singole) o `ngram_min` volte (gruppi da 2..max_ngram parole).
