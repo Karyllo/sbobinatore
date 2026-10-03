@@ -8,6 +8,7 @@ Reply ONLY with a valid JSON object, no text before or after, shaped like:
 RULES:
 - riassunto: 3-5 sentences on what is explained and how (theory, examples, exercises), in English.
 - concetti: 3 to 10 key concepts of the lecture. "ruolo" is "introdotto" if this lecture explains it for the first time, "ripreso" if it uses or deepens it.
+- Generic labels are NOT concepts ("Topic", "Lecture", "Exercise", "Example", "Introduction", "Definition", a bare "Theorem"): name the real concept ("Weierstrass theorem", not "Theorem").
 - Concept names: short (1-4 words), singular, capitalised, no ambiguous acronyms.
 - If a concept is already in the list below, REUSE EXACTLY that name.
 - prerequisiti: concepts one must already know to follow the lecture (even outside the course). At most 5.

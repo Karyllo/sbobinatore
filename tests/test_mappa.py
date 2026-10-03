@@ -100,3 +100,11 @@ def test_verify_flags_lost_content_and_gaps(settings):
     assert ("errore", "2025-09-30_prova_lez04") in problems
     assert any("mancano lez02" in i["problema"] for i in d["problemi"])
     assert ("info", L1) in problems                                 # manca la scheda nella mappa
+
+
+def test_generic_labels_are_not_concepts(settings):
+    from sbob.core import index
+    from sbob.steps.mappa import parse_card
+    card = parse_card('{"riassunto": "x", "concetti": [{"nome": "Argomento"}, {"nome": "Teorema"}, {"nome": "Teorema di Weierstrass", "ruolo": "introdotto"}], "prerequisiti": []}')
+    assert [c["nome"] for c in card["concetti"]] == ["Teorema di Weierstrass"]
+    assert index.is_generic_concept(" Esercizio ") and not index.is_generic_concept("Esercizio di Cauchy")

@@ -29,9 +29,22 @@ SHORT = {"lez": "Lezione", "ese": "Esercitazione", "lab": "Laboratorio", "sem": 
 _UNSAFE = re.compile(r'[\\/:*?"<>|#^\[\]]+')
 
 
+# Nomi che non sono concetti ma etichette della lezione: non servono a navigare e inquinano la mappa
+GENERIC_CONCEPTS = {"argomento", "argomenti", "lezione", "esercizio", "esercizi", "esempio", "esempi", "introduzione",
+                    "teoria", "ripasso", "richiamo", "richiami", "definizione", "definizioni", "dimostrazione", "teorema",
+                    "osservazione", "osservazioni", "note", "appunti", "conclusione", "conclusioni", "riepilogo"}
+
+
+def is_generic_concept(name: str) -> bool:
+    return name.strip().casefold() in GENERIC_CONCEPTS
+
+
 def load_schede(course: Course) -> dict[str, dict[str, Any]]:
     p = Layout.of(course).mappa / "schede.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    schede = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    for card in schede.values():             # vale anche per le schede già fatte
+        card["concetti"] = [c for c in card.get("concetti", []) if not is_generic_concept(c["nome"])]
+    return schede
 
 
 def save_schede(course: Course, schede: dict[str, dict[str, Any]]) -> None:
