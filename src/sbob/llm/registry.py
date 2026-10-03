@@ -113,7 +113,7 @@ class Role:
                 if not slot.dead:
                     return slot
         raise QuotaExhausted(f"Quota esaurita su tutte le chiavi di {self.provider_name} ({self.name})",
-                             action=("aspetta il reset della quota giornaliera (Google: di solito alle 9:00 italiane) o aggiungi altre chiavi"
+                             action=("aspetta il reset della quota giornaliera (Google: di solito alle 2:00 italiane) o aggiungi altre chiavi"
                                      if self.provider_name == "gemini" else
                                      f"ricarica il credito di {self.provider_name} (saldo insufficiente) o scegli un altro modello"))
 
