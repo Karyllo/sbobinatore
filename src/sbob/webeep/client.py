@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import zipfile
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +38,7 @@ class RemoteFile:
     modified: int          # timestamp unix
     module: int = 0        # id del modulo WeBeep (serve per scaricare la cartella intera come zip)
     inner: str = ""        # percorso del file dentro la cartella del modulo (come appare nello zip)
+    modname: str = ""      # tipo di modulo WeBeep ("folder", "resource"…): lo zip esiste solo per le cartelle
 
     @property
     def relpath(self) -> str:
@@ -46,6 +48,18 @@ class RemoteFile:
     def key(self) -> str:
         """Identità stabile del file (senza il token): modulo + nome nella sua posizione."""
         return self.relpath
+
+
+class _TempZip(zipfile.ZipFile):
+    """ZipFile su un file temporaneo che sparisce alla chiusura."""
+
+    def __init__(self, path: Path):
+        super().__init__(path)
+        self._tmp_path = path
+
+    def close(self) -> None:
+        super().close()
+        self._tmp_path.unlink(missing_ok=True)
 
 
 def safe_name(name: str) -> str:
@@ -117,16 +131,14 @@ class WebeepClient:
                     inner = "/".join(p for p in ((f.get("filepath") or "/").strip("/"), f.get("filename", "")) if p)
                     out.append(RemoteFile(sezione, safe_path(percorso), safe_name(nome), f["fileurl"],
                                           int(f.get("filesize") or 0), int(f.get("timemodified") or 0),
-                                          int(module.get("id") or 0), inner))
+                                          int(module.get("id") or 0), inner, module.get("modname") or ""))
         return out
 
     def folder_zip(self, module: int, moodle_session: str):
         """Cartella intera come zip dal sito (sessione web, non il token): serve per i file con nomi che il percorso
         normale non riesce a raggiungere (nomi con `%28`, `%C3%A0`…: pluginfile dà 404, lo zip li contiene).
-        Restituisce un `zipfile.ZipFile` o None se non riesce. Il cookie non si stampa né si salva."""
-        import io
-        import zipfile
-
+        Restituisce un `zipfile.ZipFile` o None se non riesce. Il cookie non si stampa né si salva.
+        Lo zip (anche centinaia di MB) va su un file temporaneo, non in memoria: si cancella con `close()`."""
         s = requests.Session()
         s.cookies.set("MoodleSession", moodle_session, domain="webeep.polimi.it")
         try:
@@ -134,9 +146,20 @@ class WebeepClient:
             m = re.search(r'sesskey["\']?\s*[:=]\s*["\']([A-Za-z0-9]+)', page.text) or re.search(r"sesskey=([A-Za-z0-9]+)", page.text)
             if page.status_code != 200 or not m:
                 return None
-            z = s.get(f"{BASE}/mod/folder/download_folder.php", params={"id": module, "sesskey": m.group(1)}, timeout=300)
-            return zipfile.ZipFile(io.BytesIO(z.content)) if z.ok else None
-        except (requests.RequestException, zipfile.BadZipFile):
+            with s.get(f"{BASE}/mod/folder/download_folder.php", params={"id": module, "sesskey": m.group(1)},
+                       timeout=300, stream=True) as z:
+                if not z.ok:
+                    return None
+                with tempfile.NamedTemporaryFile(prefix="sbob-zip-", suffix=".zip", delete=False) as tmp:
+                    path = Path(tmp.name)
+                    for chunk in z.iter_content(1 << 20):
+                        tmp.write(chunk)
+            try:
+                return _TempZip(path)
+            except zipfile.BadZipFile:
+                path.unlink(missing_ok=True)
+                return None
+        except (requests.RequestException, OSError):
             return None
 
     def text(self, fileurl: str) -> str:

@@ -169,24 +169,38 @@ def _from_folder_zip(ctx: StepContext, client, missing: list[tuple], manifest, r
         by_module.setdefault(f.module, []).append((f, dst))
     session = load_cookie("MoodleSession")
     for module, items in by_module.items():
+        if items[0][0].modname and items[0][0].modname != "folder":      # risorsa singola: non esiste uno zip da cui riprenderla
+            for f, _ in items:
+                rep.notes.append(f"{f.relpath}: non scaricabile da WeBeep (è una risorsa singola, non una cartella: "
+                                 "il file è rotto sul sito, non c'è una riserva)")
+            continue
         zf = client.folder_zip(module, session) if (session and module) else None
-        names = set(zf.namelist()) if zf else set()
-        for f, dst in items:
-            if f.inner not in names:
-                why = "login scaduto? prova `sbob login`" if zf is None else "non c'è nemmeno nello zip della cartella"
-                rep.notes.append(f"{f.relpath}: non scaricabile da WeBeep ({why})")
-                continue
-            tmp = dst.with_name(f".dl-{dst.name}")
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            tmp.write_bytes(zf.read(f.inner))       # type: ignore[union-attr]
-            if f.modified:
-                os.utime(tmp, (f.modified, f.modified))
-            tmp.replace(dst)
-            manifest.materiale[f.key] = {"modified": f.modified, "size": f.size}
-            manifest.save()
-            rep.done.append(f.relpath)
-            rep.outputs.append(str(dst))
-            ctx.log(f"materiale: {f.relpath} preso dallo zip della cartella")
+        try:
+            _take_from_zip(ctx, zf, items, manifest, rep)
+        finally:
+            if zf is not None:
+                zf.close()                                                  # cancella lo zip temporaneo
+
+
+def _take_from_zip(ctx: StepContext, zf, items: list[tuple], manifest, rep: StepReport) -> None:
+    names = set(zf.namelist()) if zf else set()
+    for f, dst in items:
+        if f.inner not in names:
+            why = "login scaduto? prova `sbob login`" if zf is None else "non c'è nemmeno nello zip della cartella"
+            rep.notes.append(f"{f.relpath}: non scaricabile da WeBeep ({why})")
+            continue
+        tmp = dst.with_name(f".dl-{dst.name}")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        with zf.open(f.inner) as src_fh, open(tmp, "wb") as out_fh:       # a pezzi, non tutto il file in memoria
+            shutil.copyfileobj(src_fh, out_fh)
+        if f.modified:
+            os.utime(tmp, (f.modified, f.modified))
+        tmp.replace(dst)
+        manifest.materiale[f.key] = {"modified": f.modified, "size": f.size}
+        manifest.save()
+        rep.done.append(f.relpath)
+        rep.outputs.append(str(dst))
+        ctx.log(f"materiale: {f.relpath} preso dallo zip della cartella")
 
 
 # ------------------------------------------------------------------ siti personali dei docenti

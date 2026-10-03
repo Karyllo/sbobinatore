@@ -295,3 +295,52 @@ def test_excluded_results_lists_are_named_in_the_note(settings):
     note = next(n for n in rep.notes if "elenchi di esiti" in n)
     assert note.startswith("4 elenchi di esiti") and "Esiti AM1 giugno.txt" in note and "e altri 1" in note
     assert rep.done == ["Esami/Risultati notevoli.txt.md"]                       # il falso positivo di prima ora si converte
+
+
+def test_single_resource_without_zip_gets_a_specific_note(wcourse, settings, monkeypatch):
+    from sbob.core import secrets
+    from sbob.webeep.client import MissingOnServer
+    single = RemoteFile("Materiali", "", "scheda.pdf", "u1", 9, 100, 8, "scheda.pdf", "resource")
+
+    class Client(FakeClient):
+        asked = []
+        def download(self, f, dst):
+            raise MissingOnServer("404")
+        def folder_zip(self, module, session):
+            Client.asked.append(module)
+            return None
+    monkeypatch.setattr("sbob.webeep.client.WebeepClient", lambda token: Client([single]))
+    monkeypatch.setattr("sbob.auth.browser.load_token", lambda: "T")
+    monkeypatch.setattr(secrets, "load_cookie", lambda name: "sessione")
+    rep = mat.run(StepContext(settings, wcourse, quiet=True, options={"converti": False}))
+    note = next(n for n in rep.notes if "scheda.pdf" in n)
+    assert "risorsa singola" in note and "login scaduto" not in note and Client.asked == []      # nemmeno si prova lo zip
+
+
+def test_folder_zip_goes_to_a_temp_file_removed_on_close(monkeypatch):
+    import io
+    import zipfile
+
+    from sbob.webeep import client as wc
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("a.txt", b"ciao")
+
+    class Resp:
+        status_code, ok, text = 200, True, "sesskey=ABC123"
+        def __init__(self, data=b""): self.data = data
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def iter_content(self, n): yield self.data
+
+    class Session:
+        def __init__(self): self.cookies = type("C", (), {"set": lambda *a, **k: None})()
+        def get(self, url, **kw):
+            return Resp(buf.getvalue()) if "download_folder" in url else Resp()
+    monkeypatch.setattr(wc.requests, "Session", Session)
+    zf = wc.WebeepClient("T").folder_zip(5, "sess")
+    assert zf is not None and zf.read("a.txt") == b"ciao"
+    path = zf._tmp_path
+    assert path.exists() and not isinstance(zf.fp, io.BytesIO)         # su disco, non in memoria
+    zf.close()
+    assert not path.exists()
