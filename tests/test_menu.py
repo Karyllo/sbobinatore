@@ -5,14 +5,16 @@ from sbob.menu import suggest_steps, summary
 
 def test_suggest_steps_follows_pending_work(settings):
     c = settings.corso("prova")
-    assert suggest_steps(course_status(c), c) == {"materiale": False, "download": True, "audio": False, "trascrivi": False, "appunti": False}
+    assert suggest_steps(course_status(c), c) == {"materiale": False, "download": True, "audio": False, "trascrivi": False, "appunti": False,
+                                                    "mappa": False, "notebook": False}
     lay = Layout.of(c)
     lay.ensure("video", "audio")
     (lay.video / "2025-09-17_prova_lez01.mp4").write_text("x")
     (lay.audio / "2025-09-18_prova_lez02.aac").write_text("x")
     st = course_status(c)
     # lez01 ha solo il video → serve l'audio; lez02 ha solo l'audio → serve la trascrizione
-    assert suggest_steps(st, c) == {"materiale": False, "download": False, "audio": True, "trascrivi": True, "appunti": False}
+    assert suggest_steps(st, c) == {"materiale": False, "download": False, "audio": True, "trascrivi": True, "appunti": False,
+                                                    "mappa": False, "notebook": False}
     assert "2 lezioni" in summary(st)
 
 
@@ -65,3 +67,29 @@ def test_walkthrough_only_uses_existing_commands_and_options():
         assert r.exit_code == 0, f"comando non valido nella guida: {line}"
         for opt in [p for p in line.split() if p.startswith("--")]:
             assert opt in r.stdout, f"opzione {opt} non esiste per: {line}"
+
+
+def test_download_not_suggested_for_audio_only_courses(settings):
+    c = settings.corso("prova")
+    lay = Layout.of(c)
+    lay.ensure("audio")
+    (lay.audio / "2025-09-17_prova_lez01.m4a").write_text("x")
+    st = course_status(c)
+    assert st["totali"]["video"] == 0 and suggest_steps(st, c)["download"] is False
+
+
+def test_menu_offers_map_always_and_notebook_only_when_active_or_existing(settings):
+    from sbob.core.manifest import Manifest
+    from sbob.menu import step_labels
+    c = settings.corso("prova")
+    labels = step_labels(settings, c)
+    assert "mappa" in labels and "notebook" not in labels
+    settings.raw["notebook"] = {"attivo": True}
+    assert "notebook" in step_labels(settings, c)
+    settings.raw["notebook"] = {}
+    lay = Layout.of(c)
+    lay.ensure("appunti")
+    m = Manifest(lay.manifest)
+    m.notebook["id"] = "nb1"
+    m.save()
+    assert "notebook" in step_labels(settings, c)

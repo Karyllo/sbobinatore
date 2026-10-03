@@ -20,7 +20,26 @@ STEP_LABELS = {
     "audio": "Estrai l'audio dai video",
     "trascrivi": "Trascrivi gli audio",
     "appunti": "Genera gli appunti",
+    "mappa": "Aggiorna la mappa del corso",
+    "notebook": "Aggiorna il taccuino NotebookLM",
 }
+
+
+def has_notebook(settings, course: Course) -> bool:
+    """Il taccuino si offre solo se è attivo in config o se il corso ne ha già uno."""
+    from sbob.core.layout import Layout
+    from sbob.core.manifest import Manifest
+
+    if settings is not None and settings.raw.get("notebook", {}).get("attivo"):
+        return True
+    try:
+        return bool(Manifest(Layout.of(course).manifest).notebook.get("id"))
+    except (OSError, ValueError):
+        return False
+
+
+def step_labels(settings, course: Course) -> dict[str, str]:
+    return {s: label for s, label in STEP_LABELS.items() if s != "notebook" or has_notebook(settings, course)}
 
 
 def suggest_steps(status: dict[str, Any], course: Course) -> dict[str, bool]:
@@ -28,10 +47,12 @@ def suggest_steps(status: dict[str, Any], course: Course) -> dict[str, bool]:
     todo = status["da_fare"]
     return {
         "materiale": bool(course.webeep_id or course.extra.get("materiale_siti")),
-        "download": bool(course.sorgenti) and status["totali"]["video"] == 0,
+        "download": bool(course.sorgenti) and status["totali"]["video"] == 0 and status["totali"]["audio"] == 0,
         "audio": bool(todo["audio"]),
         "trascrivi": bool(todo["trascrizione"]),
         "appunti": bool(todo["appunti"]),
+        "mappa": False,          # costa quota: si spunta a mano
+        "notebook": False,
     }
 
 
@@ -141,7 +162,7 @@ def _work_on_course(settings) -> int:
     suggested = suggest_steps(status, course)
     steps = questionary.checkbox(
         "Cosa vuoi fare?",
-        choices=[questionary.Choice(label, value=s, checked=suggested[s]) for s, label in STEP_LABELS.items()],
+        choices=[questionary.Choice(label, value=s, checked=suggested[s]) for s, label in step_labels(settings, course).items()],
     ).ask()
     if not steps:
         console.print("Niente da fare.")
