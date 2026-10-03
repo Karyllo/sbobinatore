@@ -276,7 +276,22 @@ def test_404_files_are_taken_from_the_folder_zip(wcourse, settings, monkeypatch)
 
 
 def test_results_lists_are_never_converted():
-    for name in ("Esiti AM1 - 03-07-26 - IV appello.pdf", "Esito AM1 - 09-06-26.pdf", "Risultati prova.pdf", "graduatoria.pdf"):
+    for name in ("Esiti AM1 - 03-07-26 - IV appello.pdf", "Esito AM1 - 09-06-26.pdf", "Risultati prova.pdf", "graduatoria.pdf",
+                 "Risultati esame 12-06.pdf", "Voti compitino 1.pdf", "Verbalizzazione.pdf", "Risultati appello.pdf"):
         assert mat.is_results_list(name), name
-    for name in ("Testo AM1 - I appello.pdf", "Traccia soluzioni AM1.pdf", "Derivata.pdf", "Sviluppi di Taylor.pdf"):
+    for name in ("Testo AM1 - I appello.pdf", "Traccia soluzioni AM1.pdf", "Derivata.pdf", "Sviluppi di Taylor.pdf",
+                 "Risultati notevoli di analisi.pdf", "Voti e valutazioni del corso.pdf", "Risultati teorici.pdf"):
         assert not mat.is_results_list(name), name
+
+
+def test_excluded_results_lists_are_named_in_the_note(settings):
+    c = settings.corso("prova")
+    lay = Layout.of(c)
+    (lay.materiale / "Esami").mkdir(parents=True)
+    for n in ("Esiti AM1 giugno.txt", "Risultati esame luglio.txt", "Graduatoria.txt", "Voti compitino.txt",
+              "Risultati notevoli.txt"):
+        (lay.materiale / "Esami" / n).write_text("dati")
+    rep = mat.run(StepContext(settings, c, quiet=True, options={"converti": True}))
+    note = next(n for n in rep.notes if "elenchi di esiti" in n)
+    assert note.startswith("4 elenchi di esiti") and "Esiti AM1 giugno.txt" in note and "e altri 1" in note
+    assert rep.done == ["Esami/Risultati notevoli.txt.md"]                       # il falso positivo di prima ora si converte

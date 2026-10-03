@@ -93,12 +93,17 @@ def _office_to_pdf(src: Path, tmp: Path) -> Path | None:
     return pdf if res.returncode == 0 and pdf.exists() else None
 
 
-_RESULTS = re.compile(r"\b(esit[io]|risultati|graduatoria|voti|verbalizzazion\w*)\b", re.I)
+_RESULTS = re.compile(r"\b(esit[io]|graduatoria|verbalizzazion\w*)\b", re.I)          # sempre elenchi di studenti
+_RESULTS_WORDS = re.compile(r"\b(risultati|voti)\b", re.I)                             # ambigue: "Risultati notevoli…" è materiale vero
+_RESULTS_CONTEXT = re.compile(r"\b(esam\w*|appell\w*|prov[ae]|compitin\w*|itinere)\b", re.I)
 
 
 def is_results_list(name: str) -> bool:
-    """'Esiti AM1 - 03-07-26.pdf', 'Risultati prova', 'Graduatoria': liste con i dati (matricole, voti) di altri studenti."""
-    return bool(_RESULTS.search(Path(name).stem))
+    """'Esiti AM1 - 03-07-26.pdf', 'Risultati prova', 'Graduatoria': liste con i dati (matricole, voti) di altri studenti.
+    'Risultati' e 'voti' da soli non bastano ("Risultati notevoli di analisi" è materiale): servono anche esame, appello,
+    prova, compitino o in itinere nel nome."""
+    stem = Path(name).stem
+    return bool(_RESULTS.search(stem) or (_RESULTS_WORDS.search(stem) and _RESULTS_CONTEXT.search(stem)))
 
 
 def _office_to_text(src: Path) -> str | None:
@@ -331,7 +336,10 @@ def convert_all(ctx: StepContext, rep: StepReport) -> None:
         todo.append((src, rel, h, out))
     todo += degraded_pending
     if privacy_skipped:
-        rep.notes.append(f"{len(privacy_skipped)} elenchi di esiti non convertiti (contengono dati di altri studenti)")
+        first = ", ".join(Path(r).name for r in privacy_skipped[:3])
+        more = f" e altri {len(privacy_skipped) - 3}" if len(privacy_skipped) > 3 else ""
+        rep.notes.append(f"{len(privacy_skipped)} elenchi di esiti non convertiti (contengono dati di altri studenti): "
+                         f"{first}{more}. Se uno è materiale vero, rinominalo")
     if ctx.dry_run:
         rep.done += [f"{rel}.md" for _, rel, _, _ in todo]
         return
