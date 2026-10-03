@@ -159,3 +159,12 @@ def test_quota_without_text_role_still_raises(pdf, tmp_path):
     from sbob.core.report import NeedsHuman
     with pytest.raises(NeedsHuman):
         convert_pdf(pdf, tmp_path / "o.md", QuotaRole(0), pages_per_block=2, workers=1)
+
+
+def test_text_mode_skips_scanned_pages(tmp_path):
+    p = tmp_path / "scan.pdf"
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), "Pagina con testo vero e proprio")
+    doc.new_page()                                                    # scansione: nessun testo estraibile
+    doc.save(p)
+    assert pdf2md._pages_with_text(p, [0, 1]) == {0}

@@ -90,6 +90,17 @@ def _blocks(todo: list[int], size: int) -> list[tuple[int, int]]:
     return out
 
 
+MIN_TEXT_CHARS = 10
+
+
+def _pages_with_text(pdf: Path, pages: list[int]) -> set[int]:
+    """Pagine con un testo estraibile: nelle scansioni (appunti a mano) non c'è niente da dare a un modello solo-testo."""
+    import pymupdf as fitz
+
+    with fitz.open(pdf) as doc:
+        return {n for n in pages if len(doc.load_page(n).get_text("text").strip()) >= MIN_TEXT_CHARS}
+
+
 def _text_message(pdf: Path, first: int, last: int, lingua: str) -> Message:
     """Modalità 'solo testo': testo estratto da ogni pagina, con un segnale dove ci sono figure non leggibili."""
     import pymupdf as fitz
@@ -175,7 +186,9 @@ def convert_pdf(pdf: Path, out: Path, role: Role, lingua: str = "it", *, force: 
     def text_block(first: int, last: int) -> None:
         assert text_role is not None
         text_done = _ckpt_map(ckpt, text=True)
-        pages = [n for n in range(first, last + 1) if n not in text_done]
+        wanted = [n for n in range(first, last + 1) if n not in text_done]
+        readable = _pages_with_text(pdf, wanted)
+        pages = [n for n in wanted if n in readable]      # le scansioni restano in attesa di un modello a visione
         for a, b in _blocks(pages, pages_per_block):
             r = text_role.complete([_text_message(pdf, a, b, lingua)], item=f"{pdf.stem}#t{a + 1}-{b + 1}",
                                    system=prompts.load(lingua, "pdf_testo"),
