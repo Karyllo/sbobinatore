@@ -36,3 +36,32 @@ def test_help_text_mentions_only_existing_commands():
     names |= {g.name for g in app.registered_groups}
     for cmd in re.findall(r"^\s+sbob ([a-z\-]+)", HELP_TEXT, re.M):
         assert cmd in names, cmd
+
+
+def test_walkthrough_only_uses_existing_commands_and_options():
+    """docs/guida.md è la prima cosa che legge un utente nuovo: se cita un comando o un'opzione che non esistono, il test fallisce."""
+    import re
+    from pathlib import Path
+
+    from typer.testing import CliRunner
+
+    from sbob.cli import app
+    guide = (Path(__file__).resolve().parents[1] / "docs" / "guida.md").read_text()
+    runner = CliRunner()
+    cmds = set()
+    for block in re.findall(r"```bash\n(.*?)```", guide, re.S):
+        for line in block.splitlines():
+            if line.startswith("sbob "):
+                cmds.add(line.split("#")[0].strip())
+    assert len(cmds) >= 12
+    for line in cmds:
+        parts = [p for p in line.split()[1:] if not p.startswith('"') and p.upper() != p]          # via argomenti d'esempio
+        words = []
+        for p in parts:
+            if p.startswith("--"):
+                break
+            words.append(p)
+        r = runner.invoke(app, [*words, "--help"])
+        assert r.exit_code == 0, f"comando non valido nella guida: {line}"
+        for opt in [p for p in line.split() if p.startswith("--")]:
+            assert opt in r.stdout, f"opzione {opt} non esiste per: {line}"

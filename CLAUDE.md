@@ -309,6 +309,12 @@ Miglioramenti nati dagli errori:
 - **Timestamp: decisione dell'utente, NON li vuole** ("non mi convince"). Misurato: esatti al secondo su 3 minuti, ma su una lezione di 130 minuti solo 16 voci, ferme al minuto 89 e sfasate di 1-5 minuti. `[trascrizione] timestamp` ora è `false` di default (il codice resta: `transcriber_timestamp.md`, `shift_timestamps`, minuto in `cerca`); la skill non promette il minuto. Non riproporre i timestamp negli appunti.
 - **Da tenere presente per il materiale scansionato:** la conversione solo-testo (DeepSeek) non serve per le scansioni; servono i modelli a visione, che condividono la quota con la trascrizione. Priorità: prima trascrizione, poi conversione, nei giorni dopo.
 
+## Accessibilità per chi non conosce la CLI (2026-10-03, richiesta dell'utente: "serve a gente che non sa come funziona un cli")
+- `sbob aiuto` (alias nascosto `sbob help`): cos'è, prima volta, ogni giorno, studiare, se qualcosa non va. `sbob --help` raggruppato per riquadri ("Per cominciare", "Ogni giorno", "Per studiare", "Un passo alla volta", "Strumenti", ordine in `HELP_PANELS`), descrizioni in italiano semplice (niente LLM/LaunchAgent/multimodale).
+- `sbob` da solo: menu iniziale (`HOME_CHOICES`): lavora su un corso, aggiorna tutti, scegli i corsi, cerca, domanda al taccuino, login, doctor, aiuto. Al primo avvio senza corsi propone `init`. Le voci lanciano i comandi veri (`_spawn`), il menu non diverge dalla CLI.
+- **Walkthrough: `docs/guida.md`** (linkato dal README): dal terminale al primo corso, costi e limiti del piano gratuito, tabella dei problemi comuni, privacy. Un test (`test_walkthrough_only_uses_existing_commands_and_options`) fallisce se cita comandi o opzioni inesistenti: aggiornarla insieme ai comandi.
+- **Download e formato:** `sbob download` riconosce le registrazioni già note (per id) e non riscarica; se chiedi esplicitamente `--formato video` avendo solo audio, scarica i video mancanti con gli stessi nomi (`_missing_files`); con video da config e audio presente considera fatto (il video si toglie per risparmiare spazio).
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).

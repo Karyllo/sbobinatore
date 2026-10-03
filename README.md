@@ -11,6 +11,8 @@ Dalle registrazioni delle lezioni del Politecnico di Milano agli appunti, in un 
   - **merge** dei file del corso, per NotebookLM;
   - **controllo qualità** delle sbobine.
 
+> **Nuovo alla riga di comando?** Segui la [guida passo passo](docs/guida.md): dal terminale al primo corso, senza dare niente per scontato.
+
 ## Installazione
 
 Funziona su macOS e Linux. Serve una volta sola.
