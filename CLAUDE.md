@@ -320,6 +320,9 @@ Miglioramenti nati dagli errori:
 - **Tutti i rimedi suggeriti passano da `config.install_command(*extras)`**: `uv tool install --reinstall "sbobinatore[base,<extra>] @ git+https://github.com/Karyllo/sbobinatore"`. Prima suggerivano `"sbobinatore[pdf]"` senza indirizzo, che non funziona (il pacchetto non è su PyPI) e senza `base` avrebbe tolto Gemini e il login. Un test vieta di scriverli a mano. Extra `office` = markitdown.
 - **`sbob init` col preset Gemini** non scrive più `[modelli.*]` (valgono i default distribuiti su più modelli Gemini) e chiede **una sola chiave**: prima chiedeva anche DeepSeek (la riserva dei vecchi preset) e scriveva un config che sovrascriveva i default nuovi.
 
+## Intestazioni `modello:` corrette dai log (2026-10-03)
+Prima del fix "intestazione veritiera" il campo `modello:` degli appunti riportava il modello *principale* configurato e non quello che aveva risposto. Ricostruito dai log (`.sbob/costs.jsonl`, ultima richiesta riuscita per blocco): in **Analisi 1** 6 lezioni sono di DeepSeek v4-pro e **24 del 3.5 Flash-Lite** (zero blocchi dal 3.8/3.6/3.5 Flash, che avevano esaurito subito la quota); in **Fisica 2** tutte e 9 del 3.5 Flash-Lite. Intestazioni corrette (solo `modello`/`refiner`, corpo identico, backup nello scratchpad della sessione); mappa e taccuino non cambiano. Rifare gli appunti con un modello migliore costa quota ed è una scelta dell'utente dopo aver letto la qualità.
+
 ## Da fare
 1. Config globale con i corsi veri. Prova online dell'archivio recman con i cookie `JSESSIONID`/`INGRESSCOOKIE`.
 2. **Fase 8, spazio corso**: passo `materiale` con webeep-sync (`steps/materiale.py` è nella mappa di `get_step`, ma non esiste).
