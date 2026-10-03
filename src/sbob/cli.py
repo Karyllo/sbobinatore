@@ -775,25 +775,37 @@ HELP_TEXT = f"""[bold]sbob[/bold] trasforma le registrazioni delle lezioni in ap
   4. tu cerchi negli appunti o fai domande a un assistente AI
 
 [bold]La prima volta[/bold] (una volta sola)
-  sbob init            configura cartella dei corsi, modelli e chiavi
-  sbob login           accedi con le credenziali del Poli (si apre una finestra)
-  sbob webeep scegli   scegli i corsi da seguire
-  sbob doctor          controlla che sia tutto a posto, e dice come sistemare
+  sbob init
+      configura cartella dei corsi, modelli e chiavi
+  sbob login
+      accedi con le credenziali del Poli (si apre una finestra)
+  sbob webeep scegli
+      scegli i corsi da seguire
+  sbob doctor
+      controlla che sia tutto a posto, e dice come sistemare
 
 [bold]Ogni giorno[/bold]
-  sbob                 menu guidato: ti chiede cosa vuoi fare
-  sbob aggiorna        fa tutto per tutti i tuoi corsi
-  sbob status CORSO    a che punto sei, lezione per lezione
+  sbob
+      menu guidato: ti chiede cosa vuoi fare
+  sbob aggiorna
+      fa tutto per tutti i tuoi corsi
+  sbob status CORSO
+      a che punto sei, lezione per lezione
 
 [bold]Per studiare[/bold]
-  sbob cerca "termine"                         dove se ne parla (lezione e sezione)
-  sbob notebook CORSO chiedi "domanda"         risponde con le fonti citate
+  sbob cerca "termine"
+      dove se ne parla (lezione e sezione)
+  sbob notebook CORSO chiedi "domanda"
+      risponde con le fonti citate
 
 [bold]Se qualcosa non va[/bold]
   Gli errori dicono sempre cosa fare. In più:
-  sbob doctor          controlla programmi, chiavi e accessi
-  sbob quota           quali modelli hanno finito la quota e quando tornano
-  sbob COMANDO --help  spiega un comando
+  sbob doctor
+      controlla programmi, chiavi e accessi
+  sbob quota
+      quali modelli hanno finito la quota e quando tornano
+  sbob COMANDO --help
+      spiega un comando
 
 CORSO è il nome breve del corso (lo vedi con [bold]sbob corsi[/bold]).
 Guida completa passo passo: {GUIDE_URL}"""
