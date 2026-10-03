@@ -644,6 +644,27 @@ def archivio_cmd(corso: str,
 
 
 @app.command()
+def quota(azzera: Annotated[bool, typer.Option("--azzera", help="Dimentica i modelli senza quota (dopo una ricarica o l'arrivo di una nuova chiave).")] = False,
+          as_json: JsonOpt = False):
+    """Modelli che hanno finito la quota e fra quanto si riprovano. sbob lo impara dagli errori: nessuna richiesta sprecata."""
+    from sbob.llm import cooldown
+
+    if azzera:
+        cooldown.clear()
+    rows = cooldown.status()
+    if as_json:
+        sys.stdout.write(json.dumps({"senza_quota": rows}, ensure_ascii=False, indent=2) + "\n")
+        return
+    if not rows:
+        err.print("Nessun modello segnato senza quota.")
+        return
+    t = Table("modello", "si riprova fra")
+    for r in rows:
+        t.add_row(r["modello"], f"{r['ancora_s'] // 3600} h {r['ancora_s'] % 3600 // 60:02d} min")
+    out.print(t)
+
+
+@app.command()
 def cookie(nome: Annotated[str, typer.Argument(help="ticket | MoodleSession")],
            valore: str):
     """Riserva manuale a `sbob login`: salva un cookie (file leggibile solo da te)."""

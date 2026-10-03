@@ -31,6 +31,13 @@ chiavi = "FAKE_KEY"
 
 
 @pytest.fixture(autouse=True)
+def isolated_quota_file(tmp_path, monkeypatch):
+    """Lo stato "modello senza quota" non deve uscire dai test né entrarci dal computer vero."""
+    from sbob.llm import cooldown
+    monkeypatch.setattr(cooldown, "PATH", tmp_path / "quota_test.json")
+
+
+@pytest.fixture(autouse=True)
 def no_real_sleep(monkeypatch):
     """Nessun test deve attendere davvero (poll di notebooklm, backoff del registry)."""
     import time

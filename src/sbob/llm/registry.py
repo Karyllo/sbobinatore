@@ -33,6 +33,7 @@ from typing import Any
 
 from sbob.config import ConfigError, Settings
 from sbob.core.keys import MissingKeyError, load_keys
+from sbob.llm import cooldown
 from sbob.core.ratelimit import LimiterPool
 from sbob.core.report import NeedsHuman, QuotaExhausted
 from sbob.llm.base import RETRYABLE, ErrorKind, LLMResult, Message, Params, Provider
@@ -82,11 +83,16 @@ class Role:
             raise NeedsHuman(str(e), action=f"aggiungi {e.prefix}_ACCOUNT1=... nel .env") from None
         self._slots = [_KeySlot(k, _make_provider(provider_conf["tipo"], self.provider_name, k, provider_conf))
                        for k in keys]
+        for slot in self._slots:             # già senza quota (salvato da un comando precedente): niente tentativi inutili
+            slot.dead = cooldown.until(self._slot_id(slot)) is not None
         self._rr = itertools.cycle(range(len(self._slots)))
         self._lock = Lock()
         self.fallback_factory: Callable[[], Role] | None = None         # impostato dal Registry se il ruolo ha una `riserva`
         self._fallback: Role | None = None
         self.used_fallback: str | None = None  # label della riserva, se è servita
+
+    def _slot_id(self, slot: "_KeySlot") -> str:
+        return cooldown.slot_id(self.provider_name, self.model, slot.key)
 
     @property
     def workers(self) -> int:
@@ -172,6 +178,7 @@ class Role:
                                  action=f"controlla {self.provider_conf['chiavi']}_ACCOUNT* nel .env")
             if res.error_kind == ErrorKind.QUOTA:
                 slot.dead = True
+                cooldown.mark(self._slot_id(slot), self.label, cooldown.parse_wait(res.error))
                 continue
             if res.error_kind not in RETRYABLE:
                 return res
