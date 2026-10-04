@@ -1,4 +1,4 @@
-"""`sbob login`: accesso di Ateneo in una finestra di Chrome (profilo dedicato), senza incollare cookie.
+"""`sbob login`: accesso di Ateneo in una finestra di browser dedicata (profilo suo, mai quello personale), senza incollare cookie.
 
 Dal login si ricavano:
   - il token dell'app mobile di Moodle per WeBeep (dura mesi) → ~/.config/sbob/webeep_token (0600)
@@ -196,7 +196,7 @@ def _webeep_session(ctx, headless: bool, timeout_s: int, log: Callable[[str], No
             except Exception:  # noqa: BLE001
                 raise NeedsHuman("Sessione di Ateneo scaduta", action="sbob login") from None
         else:
-            log("Completa l'accesso di Ateneo nella finestra di Chrome che si è aperta…")
+            log("Completa l'accesso di Ateneo nella finestra che si è aperta (se la sessione è ancora valida si chiude da sola)…")
             page.wait_for_url(MY_URL, timeout=timeout_s * 1000)
     return page
 
@@ -244,7 +244,7 @@ def _webex_ticket(ctx, page, headless: bool, email: str | None, timeout_s: int,
             log("Webex: serve l'email del Poli per l'accesso automatico (aggiungi [login] email = \"...\" in sbob.toml)")
             return None
         else:
-            log("Webex: scrivi la tua email del Poli nella finestra di Chrome e premi Invio…")
+            log("Webex: scrivi la tua email del Poli nella finestra e premi Invio…")
     except Exception:  # noqa: BLE001 — nessun campo email: forse l'accesso è già in corso
         pass
     ticket = _wait_cookie(ctx, WEBEX, "ticket", 30 if headless else timeout_s, page)
