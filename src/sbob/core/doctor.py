@@ -118,7 +118,7 @@ def check_secrets() -> list[dict]:
 
 
 def check_login() -> list[dict]:
-    from sbob.auth.browser import PROFILE_DIR, load_token
+    from sbob.auth.browser import load_token, profile_dir
 
     token = load_token()
     ok, det = False, "nessun token (WeBeep non raggiungibile da sbob)"
@@ -132,9 +132,16 @@ def check_login() -> list[dict]:
             det = "token valido" if ok else f"token non valido ({r.get('errorcode')})"
         except Exception as e:  # noqa: BLE001
             det = f"verifica non riuscita: {e}"
-    out = [_check("token WeBeep", ok, det, "sbob login", opzionale=True),
-           _check("profilo login", PROFILE_DIR.exists(),
-                  "rinnovo automatico di ticket e cookie" if PROFILE_DIR.exists() else "mai eseguito `sbob login`",
+    from sbob.auth.browser import browser_installed, current_kind
+
+    kind = current_kind()
+    out = [_check("browser per il login", browser_installed(kind),
+                  ("Firefox dedicato di sbob" if kind == "firefox" else "Chrome, Edge o Chromium (anche quello dedicato di sbob)")
+                  if browser_installed(kind) else "nessuno trovato: serve solo per `sbob login`",
+                  "sbob installa-browser" + (" --browser firefox" if kind == "firefox" else ""), opzionale=True),
+           _check("token WeBeep", ok, det, "sbob login", opzionale=True),
+           _check("profilo login", profile_dir().exists(),
+                  "rinnovo automatico di ticket e cookie" if profile_dir().exists() else "mai eseguito `sbob login`",
                   "sbob login", opzionale=True),
            _check("playwright", _has("playwright"), "per sbob login",
                   install_command("login"), opzionale=True)]

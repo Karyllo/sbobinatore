@@ -17,8 +17,12 @@ import json
 import os
 import re
 import secrets
+import shutil
+import subprocess
+import sys
 from collections.abc import Callable
 from contextlib import contextmanager
+from pathlib import Path
 
 from sbob.config import CONFIG_HOME, install_command
 from sbob.core.report import NeedsHuman
@@ -61,25 +65,109 @@ def load_token() -> str | None:
     return TOKEN_FILE.read_text(encoding="utf-8").strip() if TOKEN_FILE.exists() else None
 
 
+KINDS = ("chromium", "firefox")
+KIND_FILE = CONFIG_HOME / "browser_kind"
+
+
+def current_kind() -> str:
+    """Il browser dedicato in uso (scelto con `sbob login --browser`): lo ricordano anche il rinnovo automatico e l'archivio."""
+    try:
+        kind = KIND_FILE.read_text().strip()
+    except OSError:
+        return "chromium"
+    return kind if kind in KINDS else "chromium"
+
+
+def set_kind(kind: str) -> None:
+    CONFIG_HOME.mkdir(parents=True, exist_ok=True)
+    KIND_FILE.write_text(kind)
+
+
+def profile_dir(kind: str | None = None) -> Path:
+    """Chromium e Firefox non possono condividere un profilo: ognuno ha il suo, entrambi separati dal browser personale."""
+    return PROFILE_DIR if (kind or current_kind()) == "chromium" else CONFIG_HOME / "browser-firefox"
+
+
+class BrowserMissing(Exception):
+    """Nessun browser utilizzabile per l'accesso (né Chrome/Edge di sistema né il Chromium dedicato di sbob)."""
+
+
+def _bundled(kind: str) -> list[Path]:
+    root = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    roots = [Path(root)] if root else [Path.home() / ".cache" / "ms-playwright",
+                                       Path.home() / "Library" / "Caches" / "ms-playwright"]
+    return [d for r in roots if r.is_dir() for d in r.glob(f"{kind}-*")]
+
+
+def browser_installed(kind: str | None = None) -> bool:
+    """C'è un browser con cui fare l'accesso? Per Firefox conta solo la sua build dedicata (Playwright non può
+    guidare il Firefox di tutti i giorni); per Chromium anche Chrome/Edge/Chromium di sistema."""
+    if (kind or current_kind()) == "firefox":
+        return bool(_bundled("firefox"))
+    system = [Path("/Applications/Google Chrome.app"), Path("/Applications/Microsoft Edge.app"),
+              Path("/Applications/Chromium.app")]
+    if any(p.exists() for p in system):
+        return True
+    if any(shutil.which(b) for b in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+                                       "microsoft-edge")):
+        return True
+    return bool(_bundled("chromium"))
+
+
+def install_dedicated_browser(kind: str = "chromium") -> int:
+    """Scarica il browser dedicato di sbob (Chromium circa 150 MB, Firefox circa 80 MB; una volta sola). È un browser a
+    parte: il tuo browser di tutti i giorni non c'entra e non viene toccato."""
+    return subprocess.call([sys.executable, "-m", "playwright", "install", kind])
+
+
+def _launch(p, headless: bool, kind: str = "chromium"):
+    """Chromium: prova Chrome, poi Edge, poi il Chromium dedicato. Firefox: solo la sua build dedicata.
+    BrowserMissing se nessuno parte."""
+    opts = {"headless": headless, "viewport": {"width": 1100, "height": 800}}
+    if kind == "firefox":
+        try:
+            return p.firefox.launch_persistent_context(str(profile_dir("firefox")), **opts)
+        except Exception as e:  # noqa: BLE001
+            raise BrowserMissing(str(e)) from None
+    last: Exception | None = None
+    for channel in ("chrome", "msedge", None):
+        try:
+            return p.chromium.launch_persistent_context(str(profile_dir("chromium")), **opts,
+                                                        **({"channel": channel} if channel else {}))
+        except Exception as e:  # noqa: BLE001 — quel browser non c'è: si passa al prossimo
+            last = e
+    raise BrowserMissing(str(last))
+
+
 @contextmanager
-def browser(headless: bool):
+def browser(headless: bool, kind: str | None = None):
+    kind = kind or current_kind()
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         raise NeedsHuman("Playwright non installato", action=install_command("login")) from None
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    prof = profile_dir(kind)
+    prof.mkdir(parents=True, exist_ok=True)
     os.chmod(CONFIG_HOME, 0o700)
-    os.chmod(PROFILE_DIR, 0o700)       # il profilo contiene la sessione di Ateneo
+    os.chmod(prof, 0o700)              # il profilo contiene la sessione di Ateneo
     with sync_playwright() as p:
         try:
-            ctx = p.chromium.launch_persistent_context(str(PROFILE_DIR), channel="chrome", headless=headless,
-                                                       viewport={"width": 1100, "height": 800})
-        except Exception:  # noqa: BLE001 — Chrome non installato: si prova con il Chromium di Playwright
+            ctx = _launch(p, headless, kind)
+        except BrowserMissing:
+            # niente browser: in un terminale si chiede il permesso di scaricarne uno dedicato; altrimenti serve l'utente
+            fix = "sbob installa-browser" + (" --browser firefox" if kind == "firefox" else "")
+            if headless or not sys.stdin.isatty():
+                raise NeedsHuman("Non trovo un browser per l'accesso" + (" (Firefox dedicato)" if kind == "firefox"
+                                 else " (Chrome, Edge o Chromium)"), action=fix) from None
+            size = "80" if kind == "firefox" else "150"
+            answer = input(f"Non trovo un browser utilizzabile. Scarico {'Firefox' if kind == 'firefox' else 'Chromium'} dedicato "
+                           f"a sbob (circa {size} MB, una volta sola; il tuo browser di sempre non viene toccato)? [S/n] ").strip().lower()
+            if answer not in ("", "s", "si", "sì", "y", "yes") or install_dedicated_browser(kind) != 0:
+                raise NeedsHuman("Senza un browser non posso fare l'accesso", action=fix) from None
             try:
-                ctx = p.chromium.launch_persistent_context(str(PROFILE_DIR), headless=headless)
-            except Exception as e:  # noqa: BLE001
-                raise NeedsHuman(f"Impossibile avviare il browser: {e}",
-                                 action="installa Google Chrome oppure: uv tool run playwright install chromium") from None
+                ctx = _launch(p, headless, kind)
+            except BrowserMissing as e:
+                raise NeedsHuman(f"Browser scaricato ma non parte: {e}", action="sbob doctor") from None
         if STATE_FILE.exists():
             try:
                 ctx.add_cookies(json.loads(STATE_FILE.read_text())["cookies"])
@@ -180,12 +268,18 @@ def _webeep_email() -> str | None:
 
 
 def login(settings, headless: bool = False, timeout_s: int = 600,
-          log: Callable[[str], None] = print) -> dict[str, bool]:
-    """Esegue (o rinnova, con headless=True) l'accesso e salva token e cookie. Restituisce cosa è stato ottenuto."""
+          log: Callable[[str], None] = print, kind: str | None = None) -> dict[str, bool]:
+    """Esegue (o rinnova, con headless=True) l'accesso e salva token e cookie. Restituisce cosa è stato ottenuto.
+    Browser: `kind` esplicito, poi `[login] browser` in config, poi quello usato l'ultima volta (il rinnovo automatico
+    deve riaprire lo stesso profilo dell'accesso)."""
     from sbob.steps.download import set_cookie
 
+    kind = kind or (settings.raw.get("login", {}) or {}).get("browser") or current_kind()
+    if kind not in KINDS:
+        raise NeedsHuman(f"Browser '{kind}' non valido", action=f"usa uno tra: {', '.join(KINDS)}")
     got = {"webeep_token": False, "MoodleSession": False, "ticket": False}
-    with browser(headless) as ctx:
+    with browser(headless, kind) as ctx:
+        set_kind(kind)                                  # il rinnovo e l'archivio useranno questo stesso profilo
         page = _webeep_session(ctx, headless, timeout_s, log)
         save_token(_webeep_token(ctx))
         got["webeep_token"] = True

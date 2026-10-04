@@ -40,7 +40,7 @@ def _private_dir(path: Path) -> None:
 def secure_permissions() -> list[str]:
     """Stringe i permessi di tutto ciò che contiene credenziali. Restituisce i percorsi sistemati."""
     fixed = []
-    targets_dir = [CONFIG_HOME, CONFIG_HOME / "browser", prd_cookie_store().parent]
+    targets_dir = [CONFIG_HOME, CONFIG_HOME / "browser", CONFIG_HOME / "browser-firefox", prd_cookie_store().parent]
     targets_file = [CONFIG_HOME / "webeep_token", CONFIG_HOME / "browser_state.json", CONFIG_HOME / ".env",
                     cookie_store(), prd_cookie_store()]
     for d in targets_dir:

@@ -632,13 +632,14 @@ def aggiungi_corso():
 
 @app.command()
 def login(rinnova: Annotated[bool, typer.Option("--rinnova", help="Senza finestra: rinnova token e ticket se la sessione di Ateneo è ancora valida.")] = False,
+          browser: Annotated[Optional[str], typer.Option("--browser", help="chromium (predefinito: Chrome, Edge o Chromium) | firefox (build dedicata di Firefox). Si ricorda per i rinnovi.")] = None,
           as_json: JsonOpt = False):
-    """Accesso di Ateneo in una finestra di Chrome: salva token WeBeep e cookie Webex, senza incollare niente."""
+    """Accesso di Ateneo in una finestra di browser dedicata: salva token WeBeep e cookie Webex, senza incollare niente."""
     from sbob.auth.browser import login as do_login
 
     try:
         with _stdout_guard(as_json):
-            got = do_login(_settings(), headless=rinnova, log=lambda m: err.print(m))
+            got = do_login(_settings(), headless=rinnova, log=lambda m: err.print(m), kind=browser)
     except NeedsHuman as e:
         rep = StepReport(step="login", needs_human=str(e), action=e.action)
         _emit([rep], as_json)
@@ -757,6 +758,28 @@ def quota(azzera: Annotated[bool, typer.Option("--azzera", help="Dimentica i mod
     out.print(t)
 
 
+@app.command("installa-browser")
+def installa_browser(browser: Annotated[str, typer.Option("--browser", help="chromium (circa 150 MB) | firefox (circa 80 MB)")] = "chromium"):
+    """Scarica un browser dedicato a sbob per l'accesso (se non hai Chrome, Edge o Chromium, o se vuoi Firefox). Una volta sola."""
+    from sbob.auth.browser import KINDS, browser_installed, install_dedicated_browser, set_kind
+
+    if browser not in KINDS:
+        err.print(f"[red]--browser deve essere uno tra: {', '.join(KINDS)}[/red]")
+        raise typer.Exit(Exit.ERROR)
+    if browser_installed(browser):
+        set_kind(browser)
+        err.print("[green]Hai già un browser utilizzabile per l'accesso.[/green] Prossimo passo: sbob login")
+        return
+    err.print(f"Scarico {'Firefox' if browser == 'firefox' else 'Chromium'} dedicato a sbob (circa "
+              f"{'80' if browser == 'firefox' else '150'} MB). Il tuo browser di tutti i giorni non viene toccato.")
+    code = install_dedicated_browser(browser)
+    if code != 0:
+        err.print("[red]Download non riuscito.[/red] Controlla la connessione e riprova, oppure installa Google Chrome.")
+        raise typer.Exit(Exit.ERROR)
+    set_kind(browser)
+    err.print("[green]Fatto.[/green] Prossimo passo: sbob login" + (" --browser firefox" if browser == "firefox" else ""))
+
+
 @app.command()
 def cookie(nome: Annotated[str, typer.Argument(help="ticket | MoodleSession")],
            valore: str):
@@ -827,7 +850,7 @@ def help_alias():
 
 # Come si raggruppano i comandi in `sbob --help`: per cosa vuoi fare, non in ordine di scrittura nel codice
 HELP_PANELS = {
-    "Per cominciare": ["aiuto", "init", "login", "webeep", "doctor", "aggiungi-corso", "installa-skill"],
+    "Per cominciare": ["aiuto", "init", "login", "installa-browser", "webeep", "doctor", "aggiungi-corso", "installa-skill"],
     "Ogni giorno": ["aggiorna", "status", "run", "corsi", "pianifica"],
     "Per studiare": ["cerca", "notebook", "mappa", "indice", "verifica"],
     "Un passo alla volta": ["materiale", "download", "audio", "trascrivi", "appunti", "merge", "link", "pdf", "archivio"],

@@ -125,7 +125,7 @@ def write_env(path: Path, keys: dict[str, str]) -> None:
 # ------------------------------------------------------------------ interattivo
 
 def _ask_course(questionary, root: Path) -> str | None:
-    nome = questionary.text("Nome del corso (es. Elettronica):").ask()
+    nome = questionary.text("Nome del corso (es. Elettronica; Invio senza scrivere = ho finito):").ask()
     if not nome:
         return None
     slug = questionary.text("Nome breve, usato nei file:", default=slugify(nome)).ask() or slugify(nome)
@@ -159,19 +159,30 @@ def init(force: bool = False) -> int:
     preset = questionary.select("Con quale modello vuoi generare gli appunti?",
                                 choices=[questionary.Choice(v["label"], value=k) for k, v in PRESETS.items()]).ask()
     keys: dict[str, str] = {}
-    print("Chiavi API (restano solo sul tuo computer, nel file .env). Invio per saltare e aggiungerle dopo.")
+    print("Chiavi API (restano solo sul tuo computer, nel file .env).")
+    print("La chiave Gemini si prende gratis da https://aistudio.google.com/apikey (due minuti).")
     for prov in needed_providers(preset):
-        val = questionary.password(f"Chiave {prov} ({KEY_PREFIX[prov]}):").ask()
-        if val:
-            keys[f"{KEY_PREFIX[prov]}_ACCOUNT1"] = val.strip()
+        while True:
+            val = questionary.password(f"Chiave {prov} ({KEY_PREFIX[prov]}):").ask()
+            if val and val.strip():
+                keys[f"{KEY_PREFIX[prov]}_ACCOUNT1"] = val.strip()
+                break
+            # senza chiave sbob non può trascrivere né fare appunti: meglio dirlo ora che a metà del lavoro
+            if questionary.confirm(f"Senza la chiave {prov} sbob non funziona. Continuo lo stesso e la metto dopo "
+                                   f"(in {CONFIG_HOME / '.env'})?", default=False).ask():
+                break
     courses: list[str] = []
-    while questionary.confirm("Vuoi aggiungere un corso adesso?", default=not courses).ask():
-        if c := _ask_course(questionary, Path(root).expanduser()):
+    if questionary.confirm("Vuoi aggiungere un corso a mano adesso? (Più comodo dopo, con `sbob webeep scegli`: "
+                           "li scegli da un elenco)", default=False).ask():
+        while c := _ask_course(questionary, Path(root).expanduser()):      # nome vuoto = finito
             courses.append(c)
+            if not questionary.confirm("Un altro corso?", default=False).ask():
+                break
     CONFIG_HOME.mkdir(parents=True, exist_ok=True)
     cfg.write_text(render_config(root, lingua, preset, courses), encoding="utf-8")
     write_env(CONFIG_HOME / ".env", keys)
-    print(f"Creati {cfg} e {CONFIG_HOME / '.env'}. Ora lancia: sbob doctor")
+    print(f"Creati {cfg} e {CONFIG_HOME / '.env'}.")
+    print("Prossimi passi:  sbob doctor  →  sbob login  →  sbob webeep scegli")
     return 0
 
 

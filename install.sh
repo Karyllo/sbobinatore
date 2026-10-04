@@ -48,7 +48,9 @@ esac
 if [ "$chrome" = 1 ]; then
   say "✓ Chrome già presente"
 else
-  say "! Google Chrome non trovato: serve per \`sbob login\` (l'accesso al Poli). Installalo da https://www.google.com/chrome prima di fare il login."
+  say "! Nessun Chrome/Edge/Chromium trovato: serve un browser per \`sbob login\` (l'accesso al Poli)."
+  say "  Se non vuoi installare Chrome, scrivi:  sbob installa-browser  (scarica un browser dedicato a sbob, circa 150 MB;"
+  say "  il tuo browser di tutti i giorni, Firefox compreso, non c'entra e non viene toccato)."
 fi
 
 say ""

@@ -16,7 +16,7 @@ Poi tiene tutto aggiornato quando escono nuove lezioni.
 ## Cosa ti serve
 
 - un Mac o un Linux (su Windows non l'abbiamo provato);
-- Google Chrome (serve per accedere con le credenziali del Poli);
+- un browser per accedere con le credenziali del Poli: Chrome, Edge o Chromium. Se non ce l'hai (o usi Firefox), non è un problema: `sbob installa-browser` ne scarica uno dedicato a sbob (circa 150 MB, una volta sola). Il tuo browser di tutti i giorni non c'entra e non viene toccato;
 - una **chiave Gemini** gratuita, la prendi da [Google AI Studio](https://aistudio.google.com/apikey) in due minuti;
 - un po' di pazienza il primo giorno (vedi "Quanto ci mette").
 
@@ -71,7 +71,9 @@ Controlla che non manchi niente. Se manca qualcosa, **ti dice il comando per sis
 ```bash
 sbob login
 ```
-Si apre una finestra di Chrome (separata dal tuo Chrome di tutti i giorni). Accedi come fai di solito con le credenziali di Ateneo; quando passa a Webex ti chiede l'email del Poli. Tutto qui: sbob salva da solo i permessi che servono, senza che tu copi niente. Le tue password non le vede nessuno: le scrivi tu nella pagina del Poli.
+Si apre una finestra di browser dedicata (separata dal tuo browser di tutti i giorni: Firefox, Chrome o altro). Se non trova Chrome, ti chiede il permesso di scaricarne uno dedicato (circa 150 MB, una volta sola). Accedi come fai di solito con le credenziali di Ateneo; quando passa a Webex ti chiede l'email del Poli. Tutto qui: sbob salva da solo i permessi che servono, senza che tu copi niente. Le tue password non le vede nessuno: le scrivi tu nella pagina del Poli.
+
+**Se usi Firefox (o non vuoi Chrome né Chromium):** va bene, e il tuo Firefox di tutti i giorni non viene toccato. `sbob login --browser firefox` apre una finestra di **Firefox dedicato a sbob**, che scarica da solo la prima volta (circa 80 MB; se preferisci scaricarlo prima: `sbob installa-browser --browser firefox`). sbob ricorda la scelta, quindi anche i rinnovi automatici useranno quello.
 
 Quando i permessi scadono (dopo giorni o mesi) sbob li rinnova da solo, e se non ci riesce ti dice di rifare `sbob login`.
 

@@ -254,10 +254,10 @@ def gather(ctx: StepContext, rep: StepReport) -> tuple[dict[str, dict], list[str
 def try_renew_login(ctx: StepContext) -> bool:
     """Rinnovo silenzioso di ticket e cookie tramite il profilo di `sbob login`. False se non è possibile."""
     try:
-        from sbob.auth.browser import PROFILE_DIR, login
+        from sbob.auth.browser import login, profile_dir
     except ImportError:
         return False
-    if not PROFILE_DIR.exists():
+    if not profile_dir().exists():
         return False
     ctx.log("download: cookie scaduti, provo a rinnovarli con `sbob login --rinnova`…")
     try:

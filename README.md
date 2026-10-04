@@ -15,7 +15,7 @@ Dalle registrazioni delle lezioni del Politecnico di Milano agli appunti, in un 
 
 ## Installazione
 
-Funziona su macOS e Linux. Serve una volta sola, e ti serve anche [Google Chrome](https://www.google.com/chrome/) per accedere con le credenziali del Poli.
+Funziona su macOS e Linux. Serve una volta sola, e ti serve un browser per accedere con le credenziali del Poli: va bene Chrome, Edge o Chromium, oppure `sbob installa-browser` ne scarica uno dedicato (circa 150 MB). Il tuo browser di sempre, Firefox compreso, non c'entra: `sbob login` apre una finestra a parte.
 
 **Un solo comando** (installa ffmpeg, [uv](https://docs.astral.sh/uv/) e sbob, controllando prima cosa hai già; è corto, leggilo se vuoi):
 ```bash
@@ -80,9 +80,11 @@ Ogni comando accetta `--json` (output per script e agenti) e `--help`.
 ```bash
 sbob login
 ```
-Si apre una finestra di Chrome (profilo separato da quello personale): fai l'accesso di Ateneo come al solito e, quando passa a Webex, scrivi la tua email del Poli. sbob salva da solo:
+Si apre una finestra di browser dedicata (profilo separato da quello personale): fai l'accesso di Ateneo come al solito e, quando passa a Webex, scrivi la tua email del Poli. sbob salva da solo:
 - il token di WeBeep, che dura mesi;
 - i cookie per scaricare le registrazioni.
+
+Chrome, Edge o Chromium vanno bene; se non li hai (o preferisci Firefox) usa `sbob login --browser firefox`: scarica una build di Firefox dedicata a sbob (circa 80 MB), senza toccare il tuo Firefox. Il browser scelto viene ricordato.
 
 Quando i cookie scadono, sbob li rinnova da solo senza finestra (`sbob login --rinnova`) finché la sessione di Ateneo è valida. Altrimenti ti chiede di rifare `sbob login`.
 
