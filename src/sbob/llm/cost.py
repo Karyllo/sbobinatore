@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 
+from sbob.llm import cooldown
 from sbob.llm.base import LLMResult
 
 
@@ -51,7 +52,9 @@ class CostTracker:
                         "in": u.input_tokens, "out": u.output_tokens, "cached": u.cached_tokens,
                         "thinking": u.thinking_tokens, "usd": round(usd, 6),
                         "error": result.error_kind,
-                        **({"msg": (result.error or "")[:300]} if result.error_kind else {}),
+                        **({"msg": (result.error or "")[:300], **cooldown.quota_info(result.error),
+                            **({"retry_s": int(w)} if (w := cooldown.parse_raw_wait(result.error)) else {})}
+                           if result.error_kind else {}),
                     }, ensure_ascii=False) + "\n")
 
     def summary(self) -> dict:

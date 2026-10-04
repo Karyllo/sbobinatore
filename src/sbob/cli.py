@@ -750,9 +750,10 @@ def quota(azzera: Annotated[bool, typer.Option("--azzera", help="Dimentica i mod
     if not rows:
         err.print("Nessun modello segnato senza quota.")
         return
-    t = Table("modello", "si riprova fra")
+    hm = lambda s: f"{s // 3600} h {s % 3600 // 60:02d} min"  # noqa: E731
+    t = Table("modello", "si riprova fra", "Google dice", "limite")
     for r in rows:
-        t.add_row(r["modello"], f"{r['ancora_s'] // 3600} h {r['ancora_s'] % 3600 // 60:02d} min")
+        t.add_row(r["modello"], hm(r["ancora_s"]), hm(r["google_dice_s"]) if "google_dice_s" in r else "-", r.get("limite", "-"))
     out.print(t)
 
 

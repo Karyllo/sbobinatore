@@ -43,3 +43,15 @@ def test_role_remembers_quota_across_commands_and_skips_calls(settings, monkeypa
     with pytest.raises(NeedsHuman):
         role2.complete([reg.Message.user("x")])
     assert calls == []                                                     # nessuna chiamata sprecata
+
+
+def test_quota_info_and_declared_wait_survive_the_cap():
+    msg = ("429 RESOURCE_EXHAUSTED {'violations': [{'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', "
+           "'quotaValue': '20'}]} Please retry in 22h34m30.9s.")
+    assert cooldown.quota_info(msg) == {"quota_id": "GenerateRequestsPerDayPerProjectPerModel-FreeTier", "limite": "20"}
+    assert cooldown.quota_info("503 UNAVAILABLE") == {}
+    assert cooldown.parse_raw_wait(msg) > 22 * 3600 and cooldown.parse_wait(msg) == cooldown.MAX_WAIT   # tetto solo per ritentare
+    assert cooldown.parse_raw_wait("402 Insufficient Balance") is None
+    cooldown.mark("x1", "gemini/m", cooldown.parse_wait(msg), cooldown.parse_raw_wait(msg), cooldown.quota_info(msg))
+    row = cooldown.status()[0]
+    assert row["ancora_s"] <= cooldown.MAX_WAIT and row["google_dice_s"] > 22 * 3600 and row["limite"].startswith("20 (Generate")

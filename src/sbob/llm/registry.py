@@ -178,7 +178,8 @@ class Role:
                                  action=f"controlla {self.provider_conf['chiavi']}_ACCOUNT* nel .env")
             if res.error_kind == ErrorKind.QUOTA:
                 slot.dead = True
-                cooldown.mark(self._slot_id(slot), self.label, cooldown.parse_wait(res.error))
+                cooldown.mark(self._slot_id(slot), self.label, cooldown.parse_wait(res.error),
+                              cooldown.parse_raw_wait(res.error), cooldown.quota_info(res.error))
                 continue
             if res.error_kind not in RETRYABLE:
                 return res

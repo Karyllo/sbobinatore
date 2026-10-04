@@ -18,6 +18,7 @@ from sbob.config import CONFIG_HOME
 PATH = CONFIG_HOME / "quota.json"
 DEFAULT_WAIT = 30 * 60                      # senza indicazione dal provider (es. credito finito): si riprova tra 30 minuti
 MAX_WAIT = 2 * 3600                         # tetto prudente: un 429 non costa nulla, e se la quota torna prima non si blocca un modello disponibile
+_QUOTA_INFO = re.compile(r"quotaId['\"]?\s*[:=]\s*['\"]?([A-Za-z0-9_-]+)['\"]?.*?quotaValue['\"]?\s*[:=]\s*['\"]?(\d+)", re.S | re.I)
 _RETRY = re.compile(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
 
 
@@ -32,6 +33,21 @@ def parse_wait(error_text: str | None) -> float:
         h, mi, s = (float(x) if x else 0.0 for x in m.groups())
         return min(MAX_WAIT, max(60.0, h * 3600 + mi * 60 + s))
     return DEFAULT_WAIT
+
+
+def parse_raw_wait(error_text: str | None) -> float | None:
+    """Attesa dichiarata dal provider, senza tetto (per mostrarla: "Google dice 22 h"). None se non c'è."""
+    if error_text and (m := _RETRY.search(error_text)) and any(m.groups()):
+        h, mi, s = (float(x) if x else 0.0 for x in m.groups())
+        return h * 3600 + mi * 60 + s
+    return None
+
+
+def quota_info(error_text: str | None) -> dict[str, str]:
+    """{"quota_id": ..., "limite": ...} dal messaggio d'errore (es. GenerateRequestsPerDayPerProjectPerModel-FreeTier, 20)."""
+    if error_text and (m := _QUOTA_INFO.search(error_text)):
+        return {"quota_id": m.group(1), "limite": m.group(2)}
+    return {}
 
 
 def _load() -> dict:
@@ -55,17 +71,20 @@ def until(sid: str) -> float | None:
     return float(entry["until"]) if entry and float(entry["until"]) > time.time() else None
 
 
-def mark(sid: str, label: str, seconds: float) -> None:
+def mark(sid: str, label: str, seconds: float, declared: float | None = None, info: dict | None = None) -> None:
     data = {k: v for k, v in _load().items() if float(v.get("until", 0)) > time.time()}
-    data[sid] = {"label": label, "until": time.time() + seconds}
+    data[sid] = {"label": label, "until": time.time() + seconds,
+                 **({"dichiarata": time.time() + declared} if declared else {}), **(info or {})}
     _save(data)
 
 
 def status() -> list[dict]:
     """[{modello, ancora_s}] di ciò che è ancora in attesa di quota."""
     now = time.time()
-    rows = [{"modello": v["label"], "ancora_s": int(float(v["until"]) - now)} for v in _load().values()
-            if float(v.get("until", 0)) > now]
+    rows = [{"modello": v["label"], "ancora_s": int(float(v["until"]) - now),
+             **({"google_dice_s": int(float(v["dichiarata"]) - now)} if v.get("dichiarata") else {}),
+             **({"limite": f"{v['limite']} ({v['quota_id']})"} if v.get("limite") else {})}
+            for v in _load().values() if float(v.get("until", 0)) > now]
     return sorted(rows, key=lambda r: r["ancora_s"])
 
 
