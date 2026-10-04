@@ -115,7 +115,7 @@ def browser_installed(kind: str | None = None) -> bool:
 
 
 def install_dedicated_browser(kind: str = "chromium") -> int:
-    """Scarica il browser dedicato di sbob (Chromium circa 150 MB, Firefox circa 80 MB; una volta sola). È un browser a
+    """Scarica il browser dedicato di sbob (Chromium circa 150 MB, Firefox circa 100 MB; una volta sola). È un browser a
     parte: il tuo browser di tutti i giorni non c'entra e non viene toccato."""
     return subprocess.call([sys.executable, "-m", "playwright", "install", kind])
 
@@ -159,7 +159,7 @@ def browser(headless: bool, kind: str | None = None):
             if headless or not sys.stdin.isatty():
                 raise NeedsHuman("Non trovo un browser per l'accesso" + (" (Firefox dedicato)" if kind == "firefox"
                                  else " (Chrome, Edge o Chromium)"), action=fix) from None
-            size = "80" if kind == "firefox" else "150"
+            size = "100" if kind == "firefox" else "150"
             answer = input(f"Non trovo un browser utilizzabile. Scarico {'Firefox' if kind == 'firefox' else 'Chromium'} dedicato "
                            f"a sbob (circa {size} MB, una volta sola; il tuo browser di sempre non viene toccato)? [S/n] ").strip().lower()
             if answer not in ("", "s", "si", "sì", "y", "yes") or install_dedicated_browser(kind) != 0:

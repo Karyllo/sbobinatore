@@ -73,7 +73,15 @@ sbob login
 ```
 Si apre una finestra di browser dedicata (separata dal tuo browser di tutti i giorni: Firefox, Chrome o altro). Se non trova Chrome, ti chiede il permesso di scaricarne uno dedicato (circa 150 MB, una volta sola). Accedi come fai di solito con le credenziali di Ateneo; quando passa a Webex ti chiede l'email del Poli. Tutto qui: sbob salva da solo i permessi che servono, senza che tu copi niente. Le tue password non le vede nessuno: le scrivi tu nella pagina del Poli.
 
-**Se usi Firefox (o non vuoi Chrome né Chromium):** va bene, e il tuo Firefox di tutti i giorni non viene toccato. `sbob login --browser firefox` apre una finestra di **Firefox dedicato a sbob**, che scarica da solo la prima volta (circa 80 MB; se preferisci scaricarlo prima: `sbob installa-browser --browser firefox`). sbob ricorda la scelta, quindi anche i rinnovi automatici useranno quello.
+**Se usi Firefox (o non vuoi Chrome né Chromium):** va bene, e il tuo Firefox di tutti i giorni non viene toccato. sbob usa un **Firefox dedicato a sbob** (una copia a parte, circa 100 MB, che scarica una volta sola). Al posto di `sbob login` scrivi:
+```bash
+sbob login --browser firefox
+```
+La prima volta ti chiede il permesso di scaricarlo. Se preferisci scaricarlo prima:
+```bash
+sbob installa-browser --browser firefox
+```
+sbob ricorda la scelta: i rinnovi automatici useranno sempre quello, e non devi riscrivere `--browser firefox`. Se un giorno vuoi tornare a Chrome: `sbob login --browser chromium`.
 
 Quando i permessi scadono (dopo giorni o mesi) sbob li rinnova da solo, e se non ci riesce ti dice di rifare `sbob login`.
 

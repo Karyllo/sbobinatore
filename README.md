@@ -84,7 +84,7 @@ Si apre una finestra di browser dedicata (profilo separato da quello personale):
 - il token di WeBeep, che dura mesi;
 - i cookie per scaricare le registrazioni.
 
-Chrome, Edge o Chromium vanno bene; se non li hai (o preferisci Firefox) usa `sbob login --browser firefox`: scarica una build di Firefox dedicata a sbob (circa 80 MB), senza toccare il tuo Firefox. Il browser scelto viene ricordato.
+Chrome, Edge o Chromium vanno bene; se non li hai (o preferisci Firefox) usa `sbob login --browser firefox`: scarica una build di Firefox dedicata a sbob (circa 100 MB), senza toccare il tuo Firefox. Il browser scelto viene ricordato.
 
 Quando i cookie scadono, sbob li rinnova da solo senza finestra (`sbob login --rinnova`) finché la sessione di Ateneo è valida. Altrimenti ti chiede di rifare `sbob login`.
 

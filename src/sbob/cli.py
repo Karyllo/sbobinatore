@@ -759,7 +759,7 @@ def quota(azzera: Annotated[bool, typer.Option("--azzera", help="Dimentica i mod
 
 
 @app.command("installa-browser")
-def installa_browser(browser: Annotated[str, typer.Option("--browser", help="chromium (circa 150 MB) | firefox (circa 80 MB)")] = "chromium"):
+def installa_browser(browser: Annotated[str, typer.Option("--browser", help="chromium (circa 150 MB) | firefox (circa 100 MB)")] = "chromium"):
     """Scarica un browser dedicato a sbob per l'accesso (se non hai Chrome, Edge o Chromium, o se vuoi Firefox). Una volta sola."""
     from sbob.auth.browser import KINDS, browser_installed, install_dedicated_browser, set_kind
 
@@ -771,7 +771,7 @@ def installa_browser(browser: Annotated[str, typer.Option("--browser", help="chr
         err.print("[green]Hai già un browser utilizzabile per l'accesso.[/green] Prossimo passo: sbob login")
         return
     err.print(f"Scarico {'Firefox' if browser == 'firefox' else 'Chromium'} dedicato a sbob (circa "
-              f"{'80' if browser == 'firefox' else '150'} MB). Il tuo browser di tutti i giorni non viene toccato.")
+              f"{'100' if browser == 'firefox' else '150'} MB). Il tuo browser di tutti i giorni non viene toccato.")
     code = install_dedicated_browser(browser)
     if code != 0:
         err.print("[red]Download non riuscito.[/red] Controlla la connessione e riprova, oppure installa Google Chrome.")
