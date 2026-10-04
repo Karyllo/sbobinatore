@@ -11,7 +11,6 @@ import hashlib
 import json
 import re
 import time
-from pathlib import Path
 
 from sbob.config import CONFIG_HOME
 

@@ -142,7 +142,14 @@ Non spostare né cancellare a mano `appunti/` e `trascrizioni/`: sbob se ne acco
 ```bash
 sbob cerca "estremo superiore"
 ```
-Ti dice in quale lezione e sezione se ne parla.
+Ti mostra **le lezioni che ne parlano, le più pertinenti per prime**, con le sezioni dove compare, un esempio di testo con la parola evidenziata e il file da aprire. Se la lezione ha un riassunto nella mappa, conta come un indizio in più.
+
+Come funziona, perché ti aspetti la cosa giusta:
+- **Cerca parole, non il senso.** Trova i paragrafi che contengono *tutte* le parole che scrivi (maiuscole e accenti non contano). Se cerchi "integrale improprio" devono esserci entrambe. Una frase tra virgolette, `"diodo ideale"`, vale come una parola sola.
+- **Dove cerca:** nella mappa, negli appunti e nel materiale. Le trascrizioni (il parlato grezzo, con esitazioni e ripensamenti) solo se le chiedi con `--in trascrizioni`, oppure se negli altri non c'è niente: in quel caso lo dice.
+- **L'ordine è per pertinenza, non per quante volte c'è la parola:** conta di più se la parola è nel titolo di una sezione o tra i concetti della mappa, e un paragrafo lunghissimo non vince solo perché è lungo.
+- **Parole molto comuni** (come "integrale" in Analisi) trovano quasi tutte le lezioni: aggiungi una seconda parola per restringere, o usa `--lezioni 20` per vederne di più.
+- Per le domande che richiedono di capire il senso ("perché vale questo teorema?") usa il taccuino: `sbob notebook CORSO chiedi "..."`.
 
 **Fare una domanda** al taccuino NotebookLM (serve averlo configurato, vedi sotto):
 ```bash

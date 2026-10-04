@@ -357,8 +357,9 @@ def indice(corso: Annotated[Optional[list[str]], typer.Argument(help="Corsi (vuo
 @app.command()
 def cerca(query: Annotated[str, typer.Argument(help='Termini (tutti devono comparire); "frase tra virgolette".')],
           corso: Annotated[Optional[list[str]], typer.Option("--corso", help="Limita a questi corsi. Ripetibile.")] = None,
-          dove: Annotated[Optional[list[str]], typer.Option("--in", help="mappa|appunti|trascrizioni|materiale. Ripetibile.")] = None,
-          limite: Annotated[int, typer.Option(help="Numero massimo di risultati.")] = 20,
+          dove: Annotated[Optional[list[str]], typer.Option("--in", help="mappa|appunti|trascrizioni|materiale. Ripetibile. Di default: mappa, appunti, materiale (le trascrizioni solo se le chiedi, o se negli altri non c'è niente).")] = None,
+          limite: Annotated[int, typer.Option(help="Numero massimo di paragrafi (per --json).")] = 20,
+          lezioni: Annotated[int, typer.Option("--lezioni", help="Quante lezioni mostrare (migliori per prime).")] = 8,
           archivi: Annotated[Optional[bool], typer.Option("--archivi/--senza-archivi",
               help="Include le edizioni passate. Default: solo l'anno in corso, e se non trova niente anche le passate.")] = None,
           as_json: JsonOpt = False):
@@ -370,20 +371,38 @@ def cerca(query: Annotated[str, typer.Argument(help='Termini (tutti devono compa
         err.print(f"[red]--in non valido: {bad} (validi: {', '.join(SOURCES)})[/red]")
         raise typer.Exit(Exit.ERROR)
     settings_ = _settings()
-    s_years = {k: c.anno_accademico for k, c in settings_.corsi.items()}
-    res = search(settings_, query, corso, tuple(dove) if dove else SOURCES, limite,
+    res = search(settings_, query, corso, tuple(dove) if dove else None, limite,
                  archivi={None: "auto", True: "si", False: "no"}[archivi])
     if as_json:
         sys.stdout.write(json.dumps(res, ensure_ascii=False, indent=2) + "\n")
         return
-    err.print(f"{res['totale']} risultati per {query!r}" + (f" (mostro {limite})" if res["totale"] > limite else ""))
+    from sbob.core.search import highlight, lesson_label
+
+    lez = res.get("lezioni", [])
+    if not lez:
+        err.print(f"Nessun risultato per {query!r}. Prova con una parola sola, o con `--in trascrizioni` per cercare nel parlato.")
+        return
     if res.get("nota"):
         err.print(f"[yellow]{res['nota']}[/yellow]")
-    for h in res["risultati"]:
-        where = " · ".join(x for x in (h["corso"], h["lezione"], h["fonte"], h.get("sezione"),
-                                        f"edizione {h['edizione']}" if h["edizione"] != s_years.get(h["corso"]) else None,
-                                        f"min {h['minuto']}" if h.get("minuto") else None) if x)
-        out.print(f"[bold]{where}[/bold]\n  {h['testo']}\n  [dim]{h['file']}[/dim]")
+    err.print(f"[bold]{len(lez)} lezioni[/bold] parlano di {query!r} ({res['totale']} paragrafi). Le più pertinenti per prime:")
+    for n, e in enumerate(lez[:lezioni], 1):
+        h = e["migliore"]
+        course = settings_.corsi.get(e["corso"])
+        rel = str(h["file"])
+        if course and rel.startswith(str(course.cartella)):
+            rel = rel[len(str(course.cartella)):].lstrip("/")
+        extra = f" · edizione {e['edizione']}" if course and e["edizione"] != course.anno_accademico else ""
+        out.print(f"\n[bold]{n}. {e['corso']} · {lesson_label(e['lezione'])}{extra}[/bold]  "
+                  f"[dim]{', '.join(e['fonti'])} · {e['paragrafi']} paragraf{'o' if e['paragrafi'] == 1 else 'i'}[/dim]")
+        if e["sezioni"]:
+            out.print("   Sezioni: " + " · ".join(f"[cyan]{s}[/cyan]" for s in e["sezioni"]))
+        out.print("   " + highlight(h["testo"], res["termini"]))
+        out.print(f"   [dim]{rel}[/dim]")
+    if len(lez) > lezioni:
+        err.print(f"\n… e altre {len(lez) - lezioni} lezioni (`--lezioni {len(lez)}` per vederle tutte).")
+    if len(lez) > 10:
+        err.print("[dim]Parola molto comune: per restringere aggiungi un'altra parola, per esempio "
+                  f"sbob cerca \"{query} improprio\", o una frase tra virgolette.[/dim]")
 
 
 @app.command()
@@ -819,7 +838,8 @@ HELP_TEXT = f"""[bold]sbob[/bold] trasforma le registrazioni delle lezioni in ap
 
 [bold]Per studiare[/bold]
   sbob cerca "termine"
-      dove se ne parla (lezione e sezione)
+      le lezioni che ne parlano, le migliori per prime, con la sezione
+      (cerca parole esatte, non il senso: per una parola comune aggiungine un'altra)
   sbob notebook CORSO chiedi "domanda"
       risponde con le fonti citate
 

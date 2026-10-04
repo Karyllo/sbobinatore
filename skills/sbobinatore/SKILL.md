@@ -54,6 +54,9 @@ I file stanno su disco, quindi li leggi direttamente. La CLI serve per **trovare
 2. Leggi `<corso>/mappa/INDICE.md`, o `<root>/mappa/INDICE.md` se la domanda tocca più corsi. Spesso basta per capire quali lezioni contano.
 3. Lancia `sbob cerca "<termini>" --corso <slug> --json`.
    - Tutti i termini devono comparire. Per una frase esatta metti `"tra virgolette"` dentro la query.
+   - Di default cerca in mappa, appunti e materiale; le trascrizioni (parlato grezzo) solo con `--in trascrizioni` o se non c'è altro (la `nota` del risultato lo dice). Per una parola esatta del docente usa `--in trascrizioni`.
+   - Il risultato `--json` ha `lezioni`: una voce per lezione, ordinata per pertinenza, con `sezioni`, `fonti`, `paragrafi` e `migliore` (il paragrafo da leggere). Parti da lì invece di scorrere `risultati`.
+   - Per una parola molto comune (molte lezioni) aggiungi un'altra parola o una frase tra virgolette, non leggere decine di lezioni.
    - Restringi con `--in appunti`, `--in trascrizioni`, `--in mappa` o `--in materiale`.
    - Ogni risultato riporta `lezione`, `data`, `sezione` e `file` (e `minuto` solo se la trascrizione ha i timestamp, di solito no).
    - Se trovi pochi risultati, prova sinonimi o un singolo termine.
