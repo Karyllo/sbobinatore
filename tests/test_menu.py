@@ -65,8 +65,9 @@ def test_walkthrough_only_uses_existing_commands_and_options():
             words.append(p)
         r = runner.invoke(app, [*words, "--help"])
         assert r.exit_code == 0, f"comando non valido nella guida: {line}"
+        out = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout)          # in CI Rich colora anche senza terminale
         for opt in [p for p in line.split() if p.startswith("--")]:
-            assert opt in r.stdout, f"opzione {opt} non esiste per: {line}"
+            assert opt in out, f"opzione {opt} non esiste per: {line}"
 
 
 def test_download_not_suggested_for_audio_only_courses(settings):
