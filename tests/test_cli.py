@@ -160,3 +160,17 @@ def test_aggiorna_continues_with_next_course_after_quota_but_stops_on_login(sett
                         [StepReport(step="download", corso=corso, needs_human="login scaduto", action="sbob login")])
     runner.invoke(app, ["aggiorna", "--json"])
     assert calls == ["prova"]                               # un login scaduto sì
+
+
+def test_permission_error_gives_message_not_traceback(monkeypatch, capsys):
+    from sbob import cli
+
+    def boom():
+        raise PermissionError(1, "Operation not permitted", "/x/audio")
+    monkeypatch.setattr(cli, "app", boom)
+    monkeypatch.setattr(cli.sys, "argv", ["sbob", "stato"])
+    try:
+        cli.main()
+    except SystemExit as e:
+        assert e.code == 3
+    assert "Accesso completo al disco" in capsys.readouterr().err

@@ -896,11 +896,25 @@ def _apply_help_panels() -> None:
 _apply_help_panels()
 
 
+def _permission_denied(e: PermissionError) -> int:
+    """macOS blocca a volte l'accesso a una cartella al Terminale (Privacy e sicurezza): messaggio chiaro, niente traceback."""
+    where = f" «{e.filename}»" if e.filename else ""
+    Console(stderr=True).print(
+        f"[red]macOS non lascia leggere la cartella{where}.[/red]\n"
+        "Di solito basta dare il permesso al Terminale: Impostazioni di Sistema → Privacy e sicurezza → "
+        "Accesso completo al disco (o File e cartelle) → attiva Terminale, poi chiudilo e riaprilo.\n"
+        "Se compare solo ogni tanto, riprova: capita dopo un Ctrl+C durante un download o con una cartella ancora in sincronizzazione.")
+    return int(Exit.HUMAN)
+
+
 def main() -> None:
-    if len(sys.argv) == 1 and sys.stdin.isatty():
-        from sbob.menu import menu
-        sys.exit(menu())
-    app()
+    try:
+        if len(sys.argv) == 1 and sys.stdin.isatty():
+            from sbob.menu import menu
+            sys.exit(menu())
+        app()
+    except PermissionError as e:
+        sys.exit(_permission_denied(e))
 
 
 if __name__ == "__main__":
