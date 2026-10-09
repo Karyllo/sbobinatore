@@ -901,9 +901,9 @@ def _permission_denied(e: PermissionError) -> int:
     where = f" «{e.filename}»" if e.filename else ""
     Console(stderr=True).print(
         f"[red]macOS non lascia leggere la cartella{where}.[/red]\n"
-        "Di solito basta dare il permesso al Terminale: Impostazioni di Sistema → Privacy e sicurezza → "
-        "Accesso completo al disco (o File e cartelle) → attiva Terminale, poi chiudilo e riaprilo.\n"
-        "Se compare solo ogni tanto, riprova: capita dopo un Ctrl+C durante un download o con una cartella ancora in sincronizzazione.")
+        "Prova prima a rilanciare: spesso è passeggero (capita dopo un Ctrl+C durante un download).\n"
+        "Se si ripete: Impostazioni di Sistema → Privacy e sicurezza → File e cartelle → Terminale → attiva la cartella "
+        "(per esempio Scrivania), poi chiudi e riapri il Terminale. L'accesso completo al disco non serve.")
     return int(Exit.HUMAN)
 
 
