@@ -173,4 +173,4 @@ def test_permission_error_gives_message_not_traceback(monkeypatch, capsys):
         cli.main()
     except SystemExit as e:
         assert e.code == 3
-    assert "Accesso completo al disco" in capsys.readouterr().err
+    assert "File e cartelle" in capsys.readouterr().err
